@@ -32,5 +32,5 @@ I *HIGHLY* recommend using [IDEA](https://www.jetbrains.com/idea/download/?secti
 ![Screenshot 2025-01-22 214520](https://github.com/user-attachments/assets/cf7eb694-c4dd-4848-9339-9e323685c9f1)
 10. These changes are now on the master/main branch!
 ![Screenshot 2025-01-22 214545](https://github.com/user-attachments/assets/bbced4e9-d002-4071-815e-9c1d8a7878c1)
-*Note: if you plan to only utilize one branch, put your name within it.
+<br>*Note: if you plan to only utilize one branch, put your name within it.
 <br>Otherwise, name the branch something relevant to the change you plan to push on it!*
