@@ -1,5 +1,5 @@
 public class TestClass {
 
     // this will need to be deleted
-    // Week 2 Meeting
+    // Weekly Meeting 2
 }
