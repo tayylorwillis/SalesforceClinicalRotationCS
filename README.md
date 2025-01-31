@@ -1,8 +1,8 @@
 # Salesforce Clinical Rotations Information
-_Project Title:_ Clinical Rotation - Underserved Clinics to Matching Residents using Salesforce CRM
-_Group Members:_ Samantha Dennison, Faiza Jilani, Taylor Willis
-_Capstone Advisor:_ Dr. Reza
-_Sponsor:_ Juliann Peters
+**Project Title:** Clinical Rotation - Underserved Clinics to Matching Residents using Salesforce CRM <br>
+**Group Members:** Samantha Dennison, Faiza Jilani, Taylor Willis <br>
+**Capstone Advisor:** Dr. Reza <br>
+**Sponsor:** Juliann Peters <br>
 
 ## Project Overview
 Medical students in underserved and rural communities are often 
