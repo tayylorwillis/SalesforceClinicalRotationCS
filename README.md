@@ -12,4 +12,4 @@ designed algorithm to compare responses from medical students and
 preceptors to find the optimal match for a mentor team.
 
 ### Software Requirement Specification:
-https://docs.google.com/document/d/1-VVqTriXoC0zSYFwAiy-rbc_clTtHSTy_KgPPYBcA8A/edit?usp=sharing
+ https://docs.google.com/document/d/1-VVqTriXoC0zSYFwAiy-rbc_clTtHSTy_KgPPYBcA8A/edit?usp=sharing
