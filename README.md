@@ -1,5 +1,5 @@
-# Salesforce Clinical Rotations Information
-**Project Title:** Clinical Rotation - Underserved Clinics to Matching Residents using Salesforce CRM <br>
+# Optimizing Successful Mentorships Among Preceptors and Medical Students from Underserved Communities for AHEC (Area Health Education Center) by Generating a Matching Algorithm
+
 **Group Members:** Samantha Dennison, Faiza Jilani, Taylor Willis <br>
 **Capstone Advisor:** Dr. Reza <br>
 **Sponsor:** Juliann Peters <br>
@@ -9,7 +9,7 @@ Medical students in underserved and rural communities are often
 unable to connect with preceptors from the medical community due to 
 restrictions imposed by their geographical location. As a consequence, 
 these students are often denied the same mentorship opportunities
-as their peers. AHEC aims to create more successful and meaningful
+as their peers. AHEC (Area Health Education Center) aims to create more successful and meaningful
 mentorships for students from underserved and rural communities. 
 Our goal is to provide AHEC with a service that utilizes a specially
 designed algorithm to compare responses from medical students and 
