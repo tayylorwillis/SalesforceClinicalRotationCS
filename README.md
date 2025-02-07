@@ -1,4 +1,4 @@
-# Optimizing Successful Mentorships Among Preceptors and Medical Students from Underserved Communities for AHEC (Area Health Education Center) by Generating a Matching Algorithm
+# Matching Algorithm to Connect Preceptors with Medical Students
 
 **Group Members:** Samantha Dennison, Faiza Jilani, Taylor Willis <br>
 **Capstone Advisor:** Dr. Reza <br>
@@ -15,5 +15,5 @@ Our goal is to provide AHEC with a service that utilizes a specially
 designed algorithm to compare responses from medical students and 
 preceptors to find the optimal match for a mentor team.
 
-### Software Requirement Specification:
-https://docs.google.com/document/d/1-VVqTriXoC0zSYFwAiy-rbc_clTtHSTy_KgPPYBcA8A/edit?usp=sharing
+### Documents:
+[Software Requirement Specifications](https://docs.google.com/document/d/1-VVqTriXoC0zSYFwAiy-rbc_clTtHSTy_KgPPYBcA8A/edit?usp=sharing)
