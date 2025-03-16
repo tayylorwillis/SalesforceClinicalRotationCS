@@ -1,0 +1,297 @@
+public class FuzzyMatchingAlgorithm {
+    // Method to be called from the Autolaunched Flow
+    @InvocableMethod(label='Calculate Preceptor Matches' description='Calculates compatibility scores between a student and potential preceptors')
+    public static List<MatchResult> calculateMatches(List<MatchRequest> requests) {
+        List<MatchResult> results = new List<MatchResult>();
+        
+        for(MatchRequest req : requests) {
+            // get the student record
+            Student__c student = req.student;
+            List<Preceptor__c> preceptors = req.preceptors;
+            
+            // calculate compatibility for each preceptor
+            List<PreceptorMatch> matches = new List<PreceptorMatch>();
+            for(Preceptor__c preceptor : preceptors) {
+                // calculate match score
+                Decimal score = calculateMatchScore(student, preceptor);
+                
+                // only include if above threshold
+                if(score >= req.minimumScore) {
+                    matches.add(new PreceptorMatch(
+                        preceptor.Id,
+                        preceptor.Name,
+                        score,
+                        preceptor
+                    ));
+                }
+            }
+            
+            // sort by score (highest first)
+            matches.sort();
+            
+            results.add(new MatchResult(student.Id, student.Name, matches));
+        }
+        
+        return results;
+    }
+    
+    // input wrapper for the invocable method
+    public class MatchRequest {
+        @InvocableVariable(required=true)
+        public Student__c student;
+        
+        @InvocableVariable(required=true)
+        public List<Preceptor__c> preceptors;
+        
+        @InvocableVariable(required=false)
+        public Decimal minimumScore = 80.0;
+    }
+    
+    // output wrapper for the invocable method
+    public class MatchResult {
+        @InvocableVariable(required=true)
+        public Id studentId;
+        
+        @InvocableVariable(required=true)
+        public String studentName;
+        
+        @InvocableVariable(required=true)
+        public List<PreceptorMatch> matches;
+        
+        public MatchResult(Id studentId, String studentName, List<PreceptorMatch> matches) {
+            this.studentId = studentId;
+            this.studentName = studentName;
+            this.matches = matches;
+        }
+    }
+    
+    // match details for a single preceptor
+    public class PreceptorMatch implements Comparable {
+        @InvocableVariable
+        public Id preceptorId;
+        
+        @InvocableVariable
+        public String preceptorName;
+        
+        @InvocableVariable
+        public Decimal score;
+        
+        @InvocableVariable
+        public Preceptor__c preceptor;
+        
+        public PreceptorMatch(Id preceptorId, String preceptorName, Decimal score, Preceptor__c preceptor) {
+            this.preceptorId = preceptorId;
+            this.preceptorName = preceptorName;
+            this.score = score;
+            this.preceptor = preceptor;
+        }
+        
+        // sort in descending order (highest score first)
+        public Integer compareTo(Object compareTo) {
+            PreceptorMatch other = (PreceptorMatch)compareTo;
+            if(score > other.score) return -1;
+            if(score < other.score) return 1;
+            return 0;
+        }
+    }
+    
+    // calculate the match score between a student and preceptor
+    private static Decimal calculateMatchScore(Student__c student, Preceptor__c preceptor) {
+        Decimal totalWeightedScore = 0;
+        Decimal totalPossibleScore = 0;
+        
+        // map of field names to their ranks
+        Map<String, Integer> fieldRanks = new Map<String, Integer>{
+            'RuralStu_Specialty_Entering__c' => 1,
+            'RuralStu_Specialty_Interest__c' => 4,
+            'RuralStu_Start_Date__c' => 4,
+            'RuralStu_End_Date__c' => 4,
+            'RuralStu_Availability__c' => 5,
+            'RuralStu_Interest_Populations__c' => 4,
+            'RuralStu_Special_Skills__c' => 4,
+            'Academic_Year__c' => 5,
+            'Education_Level_for_Rotation_Course__c' => 5,
+            'Educational_Program_Primary_Discipline__c' => 5,
+            'RuralStu_Provider_Restrictions__c' => 5,
+            'RuralStu_Other_Specialty__c' => 3,
+            'RuralStu_Other_Population__c' => 3,
+            'RuralPre_Other_Learner__c' => 3,
+            'RuralStu_Other_Provider__c' => 2
+        };
+        
+        // map of field names to their types
+        Map<String, String> fieldTypes = new Map<String, String>{
+            'RuralStu_Specialty_Entering__c' => 'text',
+            'RuralStu_Specialty_Interest__c' => 'text',
+            'RuralStu_Start_Date__c' => 'date',
+            'RuralStu_End_Date__c' => 'date',
+            'RuralStu_Availability__c' => 'picklist',
+            'RuralStu_Interest_Populations__c' => 'picklist',
+            'RuralStu_Special_Skills__c' => 'picklist',
+            'Academic_Year__c' => 'text',
+            'Education_Level_for_Rotation_Course__c' => 'text',
+            'Educational_Program_Primary_Discipline__c' => 'text',
+            'RuralStu_Provider_Restrictions__c' => 'picklist',
+            'RuralStu_Other_Specialty__c' => 'text',
+            'RuralStu_Other_Population__c' => 'text',
+            'RuralPre_Other_Learner__c' => 'text',
+            'RuralStu_Other_Provider__c' => 'text'
+        };
+        
+        // map for dependent questions
+        Map<String, List<String>> dependencies = new Map<String, List<String>>{
+            'RuralStu_Provider_Restrictions__c' => new List<String>{'RuralStu_Provider_Restrictions__c', 'Yes'},
+            'RuralStu_Other_Specialty__c' => new List<String>{'RuralStu_Special_Skills__c', 'other'},
+            'RuralStu_Other_Population__c' => new List<String>{'RuralStu_Interest_Populations__c', 'other'},
+            'RuralPre_Other_Learner__c' => new List<String>{'Educational_Program_Primary_Discipline__c', 'other'},
+            'RuralStu_Other_Provider__c' => new List<String>{'RuralStu_Provider_Restrictions__c', 'other'}
+        };
+        
+        // process each field
+        for(String fieldName : fieldRanks.keySet()) {
+            // skip if field type not defined
+            if(!fieldTypes.containsKey(fieldName)) continue;
+            
+            // check dependencies
+            if(dependencies.containsKey(fieldName)) {
+                List<String> dependency = dependencies.get(fieldName);
+                String dependencyField = dependency[0];
+                String dependencyValue = dependency[1];
+                
+                // skip if dependency not met
+                String dependencyFieldValue = String.valueOf(student.get(dependencyField));
+                if(dependencyFieldValue == null || !dependencyFieldValue.contains(dependencyValue)) {
+                    continue;
+                }
+            }
+            
+            // get field values
+            Object studentValue = student.get(fieldName);
+            Object preceptorValue = preceptor.get(fieldName);
+            
+            if(studentValue == null || preceptorValue == null) {
+                continue;
+            }
+            
+            Decimal similarity = 0;
+            String fieldType = fieldTypes.get(fieldName);
+            
+            // calculate similarity based on field type
+            if(fieldType == 'text') {
+                String studentText = String.valueOf(studentValue);
+                String preceptorText = String.valueOf(preceptorValue);
+                similarity = calculateTextSimilarity(studentText, preceptorText);
+            }
+            else if(fieldType == 'picklist') {
+                String studentText = String.valueOf(studentValue);
+                String preceptorText = String.valueOf(preceptorValue);
+                
+                similarity = (studentText == preceptorText) ? 100 : 0;
+            }
+            else if(fieldType == 'date') {
+                Date studentDate = (Date)studentValue;
+                Date preceptorDate = (Date)preceptorValue;
+                
+                Integer daysDiff = Math.abs(studentDate.daysBetween(preceptorDate));
+                similarity = Math.max(0, 100 - ((daysDiff * 100.0) / 365));
+            }
+            
+            // apply weight
+            Integer rank = fieldRanks.get(fieldName);
+            totalWeightedScore += (similarity / 100) * rank;
+            totalPossibleScore += rank;
+        }
+        
+        // calculate final score
+        if(totalPossibleScore == 0) return 0;
+        
+        Decimal percentScore = (totalWeightedScore / totalPossibleScore) * 100;
+        return percentScore.setScale(1);
+    }
+    
+    // text similarity using Levenshtein distance
+    private static Decimal calculateTextSimilarity(String text1, String text2) {
+        if(text1 == null) text1 = '';
+        if(text2 == null) text2 = '';
+        
+        // convert to lowercase
+        text1 = text1.toLowerCase();
+        text2 = text2.toLowerCase();
+        
+        Integer distance = levenshteinDistance(text1, text2);
+        
+        // calculate similarity percentage
+        Integer maxLength = Math.max(text1.length(), text2.length());
+        if(maxLength == 0) return 100;
+        
+        Decimal similarity = ((maxLength - distance) * 100.0) / maxLength;
+        return similarity.setScale(1);
+    }
+
+    // levenshtein distance implementation
+    private static Integer levenshteinDistance(String s, String t) {
+        Integer m = s.length();
+        Integer n = t.length();
+        
+        List<List<Integer>> d = new List<List<Integer>>();
+        
+        for(Integer i = 0; i <= m; i++) {
+            List<Integer> row = new List<Integer>();
+            for(Integer j = 0; j <= n; j++) {
+                row.add(0);
+            }
+            d.add(row);
+        }
+        
+        for(Integer i = 0; i <= m; i++) {
+            d[i][0] = i;
+        }
+        
+        for(Integer j = 0; j <= n; j++) {
+            d[0][j] = j;
+        }
+        
+        for(Integer j = 1; j <= n; j++) {
+            for(Integer i = 1; i <= m; i++) {
+                Integer cost = (s.substring(i-1, i) == t.substring(j-1, j)) ? 0 : 1;
+                d[i][j] = Math.min(
+                    Math.min(d[i-1][j] + 1, d[i][j-1] + 1),
+                    d[i-1][j-1] + cost
+                );
+            }
+        }
+        
+        return d[m][n];
+    }
+    
+    // method to approve a match (can be called from the ScreenFlow)
+    @InvocableMethod(label='Approve Preceptor Match' description='Updates student record with approved preceptor match')
+    public static void approveMatch(List<ApproveMatchRequest> requests) {
+        List<Student__c> studentsToUpdate = new List<Student__c>();
+        
+        for(ApproveMatchRequest req : requests) {
+            studentsToUpdate.add(new Student__c(
+                Id = req.studentId,
+                Matched_Preceptor__c = req.preceptorId,
+                Match_Score__c = req.matchScore,
+                Match_Status__c = 'Approved'
+            ));
+        }
+        
+        if(!studentsToUpdate.isEmpty()) {
+            update studentsToUpdate;
+        }
+    }
+    
+    // request class for approving matches
+    public class ApproveMatchRequest {
+        @InvocableVariable(required=true)
+        public Id studentId;
+        
+        @InvocableVariable(required=true)
+        public Id preceptorId;
+        
+        @InvocableVariable(required=true)
+        public Decimal matchScore;
+    }
+}
