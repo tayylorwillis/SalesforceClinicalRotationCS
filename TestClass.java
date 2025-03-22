@@ -1,5 +1,4 @@
 public class TestClass {
 
-    // this will need to be deleted
-    // Weekly Meeting 2
+    // main branch needs redone, force push reset everything, sorry!
 }
