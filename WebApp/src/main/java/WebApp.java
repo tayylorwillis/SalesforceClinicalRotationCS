@@ -1,4 +1,4 @@
-package demo;
+
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -7,17 +7,17 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
-@WebServlet("/WebApp")
+@WebServlet("/index")
 /**
- * Servlet implementation class WebApplication
+ * Servlet implementation class WebApp
  */
-public class WebApplication extends HttpServlet {
+public class WebApp extends HttpServlet {
 	private static final long serialVersionUID = 1L;
        
     /**
      * @see HttpServlet#HttpServlet()
      */
-    public WebApplication() {
+    public WebApp() {
         super();
         // TODO Auto-generated constructor stub
     }
@@ -27,7 +27,7 @@ public class WebApplication extends HttpServlet {
 	 */
 	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
 		// TODO Auto-generated method stub
-		response.setContentType("WebApp.html");
+		response.sendRedirect("index.jsp");
 	}
 
 	/**
