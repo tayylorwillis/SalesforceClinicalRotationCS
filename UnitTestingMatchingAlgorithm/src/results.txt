@@ -1,0 +1,160 @@
+Notes:
+ - Utilized lots of debugging statements in each test, and kept them for clarity
+ - Attempted to recreate fields from the DB in classes instead
+
+Test 1: Threshold Filtering
+
+--- Starting Threshold Filtering Test ---
+Testing mode enabled to force scoring
+Created high threshold request with minimum score: 90.0
+Created low threshold request with minimum score: 20.0
+Calculating high threshold matches...
+Calculating similarity between 'Nursing' and 'Nursing'
+Similarity result: 100.0%
+Calculating similarity between 'Pediatrics' and 'Pediatrics'
+Similarity result: 100.0%
+Calculating similarity between 'Third Year' and 'Third Year'
+Similarity result: 100.0%
+Calculating similarity between 'Graduate' and 'Graduate'
+Similarity result: 100.0%
+Calculating similarity between 'Nursing' and 'Nursing'
+Similarity result: 100.0%
+Calculating similarity between 'Nursing' and 'Nursing'
+Similarity result: 100.0%
+Calculating similarity between 'Pediatrics' and 'Pediatrics'
+Similarity result: 100.0%
+Calculating similarity between 'Third Year' and 'Third Year'
+Similarity result: 100.0%
+Calculating similarity between 'Graduate' and 'Graduate'
+Similarity result: 100.0%
+Calculating similarity between 'Nursing' and 'Nursing'
+Similarity result: 100.0%
+Calculating similarity between 'Nursing' and 'Medicine'
+Similarity result: 25.0%
+Calculating similarity between 'Pediatrics' and 'Surgery'
+Similarity result: 10.0%
+Calculating similarity between 'Third Year' and 'Fourth Year'
+Similarity result: 54.5%
+Calculating similarity between 'Graduate' and 'Graduate'
+Similarity result: 100.0%
+Calculating similarity between 'Nursing' and 'Medicine'
+Similarity result: 25.0%
+Calculating low threshold matches...
+Calculating similarity between 'Nursing' and 'Nursing'
+Similarity result: 100.0%
+Calculating similarity between 'Pediatrics' and 'Pediatrics'
+Similarity result: 100.0%
+Calculating similarity between 'Third Year' and 'Third Year'
+Similarity result: 100.0%
+Calculating similarity between 'Graduate' and 'Graduate'
+Similarity result: 100.0%
+Calculating similarity between 'Nursing' and 'Nursing'
+Similarity result: 100.0%
+Calculating similarity between 'Nursing' and 'Nursing'
+Similarity result: 100.0%
+Calculating similarity between 'Pediatrics' and 'Pediatrics'
+Similarity result: 100.0%
+Calculating similarity between 'Third Year' and 'Third Year'
+Similarity result: 100.0%
+Calculating similarity between 'Graduate' and 'Graduate'
+Similarity result: 100.0%
+Calculating similarity between 'Nursing' and 'Nursing'
+Similarity result: 100.0%
+Calculating similarity between 'Nursing' and 'Medicine'
+Similarity result: 25.0%
+Calculating similarity between 'Pediatrics' and 'Surgery'
+Similarity result: 10.0%
+Calculating similarity between 'Third Year' and 'Fourth Year'
+Similarity result: 54.5%
+Calculating similarity between 'Graduate' and 'Graduate'
+Similarity result: 100.0%
+Calculating similarity between 'Nursing' and 'Medicine'
+Similarity result: 25.0%
+High threshold matches: 1
+  PR001 (Dr. Perfect Match): 98.0%
+Low threshold matches: 3
+  PR001 (Dr. Perfect Match): 98.0%
+  PR002 (Dr. Good Match): 85.0%
+  PR003 (Dr. Poor Match): 45.0%
+
+Checking which preceptors are in each list:
+High threshold contains PR001: true
+High threshold contains PR002: false
+High threshold contains PR003: false
+Low threshold contains PR001: true
+Low threshold contains PR002: true
+Low threshold contains PR003: true
+
+Final assertions:
+Checking if poor match (PR003) is in low threshold results: true
+Checking if low threshold includes all preceptors. Found: 3, Expected: at least 3
+--- Finished Threshold Filtering Test ---
+
+
+Test 2: Score Calculation
+
+Calculating similarity between 'Nursing' and 'Nursing'
+Similarity result: 100.0%
+Calculating similarity between 'Pediatrics' and 'Pediatrics'
+Similarity result: 100.0%
+Calculating similarity between 'Third Year' and 'Third Year'
+Similarity result: 100.0%
+Calculating similarity between 'Graduate' and 'Graduate'
+Similarity result: 100.0%
+Calculating similarity between 'Nursing' and 'Nursing'
+Similarity result: 100.0%
+Calculating similarity between 'Nursing' and 'Nursing'
+Similarity result: 100.0%
+Calculating similarity between 'Pediatrics' and 'Pediatrics'
+Similarity result: 100.0%
+Calculating similarity between 'Third Year' and 'Third Year'
+Similarity result: 100.0%
+Calculating similarity between 'Graduate' and 'Graduate'
+Similarity result: 100.0%
+Calculating similarity between 'Nursing' and 'Nursing'
+Similarity result: 100.0%
+Calculating similarity between 'Nursing' and 'Medicine'
+Similarity result: 25.0%
+Calculating similarity between 'Pediatrics' and 'Surgery'
+Similarity result: 10.0%
+Calculating similarity between 'Third Year' and 'Fourth Year'
+Similarity result: 54.5%
+Calculating similarity between 'Graduate' and 'Graduate'
+Similarity result: 100.0%
+Calculating similarity between 'Nursing' and 'Medicine'
+Similarity result: 25.0%
+
+
+Test 3: Similarity Calculation
+
+--- Starting Text Similarity Test ---
+Calculating similarity between 'test' and 'test'
+Similarity result: 100.0%
+Identical strings 'test' vs 'test': 100.0%
+Calculating similarity between 'test' and 'text'
+Similarity result: 75.0%
+Similar strings 'test' vs 'text': 75.0%
+Calculating similarity between 'test' and 'abcd'
+Similarity result: 0.0%
+Different strings 'test' vs 'abcd': 0.0%
+Calculating similarity between '' and ''
+Empty strings '' vs '': 100.0%
+Calculating similarity between 'Test' and 'test'
+Similarity result: 100.0%
+Case different 'Test' vs 'test': 100.0%
+--- Finished Text Similarity Test ---
+
+
+Test 4: Match Approval
+
+--- Starting Match Approval Test ---
+Cleared updatedStudents list. Size: 0
+Creating approval request for student: ST001, preceptor: PR001
+Calling approveMatch...
+Starting approveMatch with 1 requests
+Processing approval request for student: ST001
+Calling updateStudents with 1 students
+Updated 1 students in test
+Updated students size after approveMatch: 1
+First updated student: ID=ST001, matchedPreceptor=PR001, score=98.5, status=Approved
+--- Finished Match Approval Test ---
