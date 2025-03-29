@@ -88,10 +88,14 @@ public class FuzzyMatchingTest {
     }
 
     /**
-     * Test 1: Verifies that the matching algorithm correctly identifies and sorts
-     * matches based on compatibility score when using a standard threshold
+     * Tests that the matching algorithm correctly identifies and sorts matches based on compatibility scores.
+     * This test verifies:
+     * 1. That at least one match is found when using a 70% minimum threshold
+     * 2. That the perfect match (PR001) is ranked first with a score > 95%
+     * 3. That all matches are sorted in descending order by score
+     *
+     * @see FuzzyMatchingAlgorithm#calculateMatches(List)
      */
-    @Test
     public void testMatchingAlgorithmScoreCalculation() {
         FuzzyMatchingAlgorithm.TESTING_MODE = true;
 
@@ -118,7 +122,14 @@ public class FuzzyMatchingTest {
     }
 
     /**
-     * Test 2: Tests the text similarity calculation functionality with various inputs
+     * Tests the text similarity calculation functionality with various input scenarios.
+     * This test accesses the private method calculateTextSimilarity through reflection.
+     * This test verifies the following cases:
+     * 1. Identical strings should have 100% similarity
+     * 2. Strings with one character different have expected similarity
+     * 3. Completely different strings have near 0% similarity
+     * 4. Empty strings have 100% similarity
+     * 5. Case differences are ignored (case insensitive comparison)
      */
     @Test
     public void testTextSimilarityCalculation() {
@@ -171,7 +182,13 @@ public class FuzzyMatchingTest {
     }
 
     /**
-     * Test 3: Verifies that the threshold filter correctly excludes low-scoring matches
+     * Tests that the threshold filtering mechanism correctly includes or excludes matches
+     * based on the minimum score threshold. This test verifies:
+     * 1. High threshold (90%) should only include high-scoring matches
+     * 2. Low threshold (20%) should include all preceptors
+     * 3. Poor matches are correctly filtered out by high thresholds
+     *
+     * @see FuzzyMatchingAlgorithm#calculateMatches(List)
      */
     @Test
     public void testThresholdFiltering() {
@@ -266,7 +283,12 @@ public class FuzzyMatchingTest {
     }
 
     /**
-     * Test 4: Verifies that the match approval process correctly updates student records
+     * Tests that the match approval process correctly updates student records.
+     * This test verifies:
+     * 1. The correct number of students are updated (exactly one)
+     * 2. The updated student has the correct ID, preceptor ID, match score and status
+     *
+     * @see FuzzyMatchingAlgorithm#approveMatch(List)
      */
     @Test
     public void testMatchApproval() {
