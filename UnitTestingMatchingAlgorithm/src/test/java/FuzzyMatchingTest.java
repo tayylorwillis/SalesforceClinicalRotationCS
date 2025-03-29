@@ -96,6 +96,7 @@ public class FuzzyMatchingTest {
      *
      * @see FuzzyMatchingAlgorithm#calculateMatches(List)
      */
+    @Test
     public void testMatchingAlgorithmScoreCalculation() {
         FuzzyMatchingAlgorithm.TESTING_MODE = true;
 
