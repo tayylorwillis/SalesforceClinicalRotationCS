@@ -1,0 +1,612 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2761
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 public class FuzzyMatchingAlgorithm \{\
+    // main method to be called from the Auto-Launched Flow\
+    @InvocableMethod(label='Calculate Preceptor Matches' description='Calculates compatibility scores between a student and potential preceptors')\
+    public static List<MatchResult> calculateMatches(List<MatchRequest> requests) \{\
+        List<MatchResult> results = new List<MatchResult>();\
+        \
+        for(MatchRequest req : requests) \{\
+            // get the student record with related Contact\
+            Clinical_Training__c student = req.student;\
+            Contact studentContact = req.studentContact;\
+            List<Contact> preceptors = req.preceptors;\
+            List<Organization> preceptorOrganizations = req.preceptorOrganizations != null ? req.preceptorOrganizations : new List<Organization>();\
+            \
+            // create a map for easier access to preceptor organizations\
+            Map<Id, Organization> organizationMap = new Map<Id, Organization>();\
+            Organization lastOrg = null; // Track most recent organization for fallback\
+            \
+            for(Organization org : preceptorOrganizations) \{\
+                organizationMap.put(org.Id, org);\
+                lastOrg = org; // keep track of most recent org\
+            \}\
+            \
+            // calculate compatibility for each preceptor\
+            List<PreceptorMatch> matches = new List<PreceptorMatch>();\
+            Decimal highestScore = 0; // Track the highest score\
+            \
+            for(Contact preceptor : preceptors) \{\
+                // get the related Organization for this preceptor\
+                Organization preceptorOrganization = null;\
+                if (preceptor.AccountId != null) \{\
+                    preceptorOrganization = organizationMap.get(preceptor.AccountId);\
+                \}\
+                \
+                // fallback to most recently used organization if specific one not found\
+                if (preceptorOrganization == null && lastOrg != null) \{\
+                    System.debug('Using fallback organization for preceptor: ' + preceptor.Name);\
+                    preceptorOrganization = lastOrg;\
+                \}\
+                \
+                // calculate match score (handle null organization case)\
+                Decimal score = calculateMatchScore(student, studentContact, preceptor, preceptorOrganization);\
+                \
+                // track highest score\
+                if (score > highestScore) \{\
+                    highestScore = score;\
+                \}\
+                \
+                if(score >= req.minimumScore) \{\
+                    PreceptorMatch preceptorMatch = new PreceptorMatch(\
+                        preceptor.Id,\
+                        preceptor.Name,\
+                        score,\
+                        preceptor.AccountId\
+                    );\
+                    \
+                    // set specialty from preceptor\
+                    prceptorMatch.specialty = preceptor.Preceptor_Title__c != null ? preceptor.Preceptor_Title__c : '';\
+                    \
+                    matches.add(preceptorMatch);\
+                \}\
+            \}\
+            \
+            // sort by score (highest first)\
+            matches.sort();\
+            \
+            // create a list of FlowMatchWrapper objects (Flow-friendly)\
+            List<FlowMatchWrapper> flowMatches = new List<FlowMatchWrapper>();\
+            for (PreceptorMatch match : matches) \{\
+                // create wrapper using original constructor\
+                FlowMatchWrapper wrapper = new FlowMatchWrapper(\
+                    String.valueOf(match.preceptorId),\
+                    match.preceptorName,\
+                    match.score,\
+                    String.valueOf(match.accountId)\
+                );\
+                \
+                // set specialty\
+                wrapper.specialty = match.specialty;\
+                \
+                flowMatches.add(wrapper);\
+            \}\
+            \
+            results.add(new MatchResult(\
+                student.Id, \
+                student.Name, \
+                matches, \
+                highestScore,\
+                flowMatches\
+            ));\
+        \}\
+        \
+        return results;\
+    \}\
+    \
+    // input wrapper for the invocable method\
+    public class MatchRequest \{\
+        @InvocableVariable(required=true)\
+        public Clinical_Training__c student;\
+        \
+        @InvocableVariable(required=true)\
+        public Contact studentContact;\
+        \
+        @InvocableVariable(required=true)\
+        public List<Contact> preceptors;\
+        \
+        @InvocableVariable(required=false)\
+        public List<Organization> preceptorOrganizations;\
+        \
+        @InvocableVariable(required=false)\
+        public Decimal minimumScore = 50.0; // lower threshold to show more potential matches\
+    \}\
+    \
+    // output wrapper for the invocable method\
+    public class MatchResult \{\
+        @InvocableVariable(required=true)\
+        public Id studentId;\
+        \
+        @InvocableVariable(required=true)\
+        public String studentName;\
+        \
+        @InvocableVariable(required=false)\
+        public List<PreceptorMatch> matches;\
+        \
+        @InvocableVariable(required=true)\
+        public Decimal matchPercentage;\
+        \
+        // flow-friendly output variables for top match\
+        @InvocableVariable\
+        public Id topPreceptorId;\
+        \
+        @InvocableVariable\
+        public String topPreceptorName;\
+        \
+        @InvocableVariable\
+        public Decimal topMatchScore;\
+        \
+        @InvocableVariable\
+        public Id topAccountId;\
+        \
+        // flow-friendly collection of preceptor matches\
+        @InvocableVariable\
+        public List<FlowMatchWrapper> flowMatches;\
+        \
+        // serialized JSON string of matches for Flow\
+        @InvocableVariable\
+        public String matchesJson;\
+        \
+        // datatable formatted string for Lightning datatable\
+        @InvocableVariable\
+        public String datatableString;\
+        \
+        // constructor with Flow-friendly matches\
+        public MatchResult(\
+            Id studentId, \
+            String studentName, \
+            List<PreceptorMatch> matches, \
+            Decimal matchPercentage,\
+            List<FlowMatchWrapper> flowMatches\
+        ) \{\
+            this.studentId = studentId;\
+            this.studentName = studentName;\
+            this.matches = matches;\
+            this.matchPercentage = matchPercentage;\
+            this.flowMatches = flowMatches;\
+            \
+            // set top match info if available\
+            if (matches != null && !matches.isEmpty()) \{\
+                this.topPreceptorId = matches[0].preceptorId;\
+                this.topPreceptorName = matches[0].preceptorName;\
+                this.topMatchScore = matches[0].score;\
+                this.topAccountId = matches[0].accountId;\
+                \
+                // create JSON string of all matches\
+                this.matchesJson = JSON.serialize(matches);\
+                \
+                // create datatable formatted string (for Apex-defined datatable)\
+                this.datatableString = JSON.serialize(flowMatches);\
+            \}\
+        \}\
+        \
+        // legacy constructor for backward compatibility with tests\
+        public MatchResult(Id studentId, String studentName, List<PreceptorMatch> matches, Decimal matchPercentage) \{\
+            this(studentId, studentName, matches, matchPercentage, new List<FlowMatchWrapper>());\
+        \}\
+    \}\
+    \
+    // match details for a single preceptor\
+    public class PreceptorMatch implements Comparable \{\
+        @InvocableVariable\
+        public Id preceptorId;\
+        \
+        @InvocableVariable\
+        public String preceptorName;\
+        \
+        @InvocableVariable\
+        public Decimal score;\
+        \
+        @InvocableVariable\
+        public Id accountId;\
+        \
+        @InvocableVariable\
+        public String specialty;\
+        \
+        public PreceptorMatch(Id preceptorId, String preceptorName, Decimal score, Id accountId) \{\
+            this.preceptorId = preceptorId;\
+            this.preceptorName = preceptorName;\
+            this.score = score;\
+            this.accountId = accountId;\
+            this.specialty = '';\
+        \}\
+        \
+        // sort in descending order (highest score first)\
+        public Integer compareTo(Object compareTo) \{\
+            PreceptorMatch other = (PreceptorMatch)compareTo;\
+            if(score > other.score) return -1;\
+            if(score < other.score) return 1;\
+            return 0;\
+        \}\
+    \}\
+    \
+    // Calculate the match score between a student and preceptor\
+    private static Decimal calculateMatchScore(Clinical_Training__c student, Contact studentContact, Contact preceptor, Organization preceptorOrganization) \{\
+        Decimal totalWeightedScore = 0;\
+        Decimal totalPossibleScore = 0;\
+        \
+        // debug start of match calculation\
+        System.debug('Starting match calculation between student: ' + student.Name + ' and preceptor: ' + preceptor.Name);\
+        \
+        // map of field pairs based on available fields from the matching table\
+        Map<String, Map<String, Object>> fieldPairs = new Map<String, Map<String, Object>>\{\
+            // independent pairs\
+            'SpecialityEntered' => new Map<String, Object>\{\
+                'studentField' => 'RuralStu_Specialty_Entering__c',\
+                'preceptorField' => 'Preceptor_Title__c',\
+                'studentObject' => 'Clinical_Training__c',\
+                'preceptorObject' => 'Contact',\
+                'weight' => 1, // rank from table\
+                'fieldType' => 'text'\
+            \},\
+            'SpecialityInterest' => new Map<String, Object>\{\
+                'studentField' => 'RuralStu_Specialty_Interest__c',\
+                'preceptorField' => 'Preceptor_Title__c',\
+                'studentObject' => 'Clinical_Training__c',\
+                'preceptorObject' => 'Contact',\
+                'weight' => 4, // rank from table\
+                'fieldType' => 'text'\
+            \},\
+            'PreferredDuration' => new Map<String, Object>\{\
+                'studentField' => 'RuralStu_Start_Date__c',\
+                'preceptorField' => 'RuralPre_Availability__c',\
+                'studentObject' => 'Clinical_Training__c',\
+                'preceptorObject' => 'Contact',\
+                'weight' => 3, // using average since not specified\
+                'fieldType' => 'text'\
+            \},\
+            'PreferredDurationEnd' => new Map<String, Object>\{\
+                'studentField' => 'RuralStu_End_Date__c',\
+                'preceptorField' => 'RuralPre_Specific_Unavailable__c',\
+                'studentObject' => 'Clinical_Training__c',\
+                'preceptorObject' => 'Contact',\
+                'weight' => 3, // using average since not specified\
+                'fieldType' => 'text'\
+            \},\
+            'Availability' => new Map<String, Object>\{\
+                'studentField' => 'RuralStu_Availability__c',\
+                'preceptorField' => 'RuralPre_Availability__c',\
+                'studentObject' => 'Clinical_Training__c',\
+                'preceptorObject' => 'Contact',\
+                'weight' => 5, // rank from table\
+                'fieldType' => 'text'\
+            \},\
+            'UnavailableDates' => new Map<String, Object>\{\
+                'studentField' => 'RuralStu_Availability__c',\
+                'preceptorField' => 'RuralPre_Specific_Unavailable__c',\
+                'studentObject' => 'Clinical_Training__c',\
+                'preceptorObject' => 'Contact',\
+                'weight' => 5, // same as Availability\
+                'fieldType' => 'text'\
+            \},\
+            'Populations' => new Map<String, Object>\{\
+                'studentField' => 'RuralStu_Interest_Populations__c',\
+                'preceptorField' => 'RuralPre_Learner_Opportunities__c',\
+                'studentObject' => 'Clinical_Training__c',\
+                'preceptorObject' => 'Account',\
+                'weight' => 4, // rank from table\
+                'fieldType' => 'text'\
+            \},\
+            'SpecialSkills' => new Map<String, Object>\{\
+                'studentField' => 'RuralStu_Special_Skills__c',\
+                'preceptorField' => 'RuralPre_Skill_Procedures__c',\
+                'studentObject' => 'Clinical_Training__c',\
+                'preceptorObject' => 'Account',\
+                'weight' => 4, // rank from table\
+                'fieldType' => 'text'\
+            \},\
+            'AnyOtherInfo' => new Map<String, Object>\{\
+                'studentField' => 'RuralStu_Additional_Information__c',\
+                'preceptorField' => 'RuralPre_Other_Information__c',\
+                'studentObject' => 'Clinical_Training__c',\
+                'preceptorObject' => 'Contact',\
+                'weight' => 3, // using average since not specified (-)\
+                'fieldType' => 'text'\
+            \},\
+            'TypesOfLearners' => new Map<String, Object>\{\
+                'studentField' => 'RuralStu_Year_Category__c',\
+                'preceptorField' => 'RuralPre_Learner_Preferences__c',\
+                'studentObject' => 'Clinical_Training__c',\
+                'preceptorObject' => 'Contact',\
+                'weight' => 5, // rank from table\
+                'fieldType' => 'text'\
+            \},\
+            'EducationLevel' => new Map<String, Object>\{\
+                'studentField' => 'Education_Level__c',\
+                'preceptorField' => 'RuralPre_Learner_Preferences__c',\
+                'studentObject' => 'Contact',\
+                'preceptorObject' => 'Contact',\
+                'weight' => 5, // rank from table\
+                'fieldType' => 'text'\
+            \},\
+            'LearnerInterest' => new Map<String, Object>\{\
+                'studentField' => 'Educational_Program_Primary_Discipline__c',\
+                'preceptorField' => 'RuralPre_Learner_Interest__c',\
+                'studentObject' => 'Contact',\
+                'preceptorObject' => 'Contact',\
+                'weight' => 5, // rank from table\
+                'fieldType' => 'text'\
+            \},\
+            \
+            // dependent pairs\
+            'ProviderType' => new Map<String, Object>\{\
+                'studentField' => 'RuralStu_Workable_Types__c',\
+                'preceptorField' => 'RuralPre_Serving_Interest__c',\
+                'studentObject' => 'Clinical_Training__c',\
+                'preceptorObject' => 'Contact',\
+                'weight' => 5, // rank from table\
+                'fieldType' => 'text'\
+            \},\
+            'OtherSkills' => new Map<String, Object>\{\
+                'studentField' => 'RuralStu_Other_Specialty__c',\
+                'preceptorField' => 'RuralPre_Other_Skills_Procedures__c',\
+                'studentObject' => 'Clinical_Training__c',\
+                'preceptorObject' => 'Account',\
+                'weight' => 3, // rank from table\
+                'fieldType' => 'text'\
+            \},\
+            'OtherOpportunities' => new Map<String, Object>\{\
+                'studentField' => 'RuralStu_Other_Populations__c',\
+                'preceptorField' => 'RuralPre_Other_Opportunities__c',\
+                'studentObject' => 'Clinical_Training__c',\
+                'preceptorObject' => 'Account',\
+                'weight' => 3, // rank from table\
+                'fieldType' => 'text'\
+            \},\
+            'OtherLearner' => new Map<String, Object>\{\
+                'studentField' => 'Educational_Program_Primary_Discipline__c',\
+                'preceptorField' => 'RuralPre_Other_Learner__c',\
+                'studentObject' => 'Contact',\
+                'preceptorObject' => 'Contact',\
+                'weight' => 3, // rank from table\
+                'fieldType' => 'text'\
+            \},\
+            'OtherProviderType' => new Map<String, Object>\{\
+                'studentField' => 'RuralStu_Other_Provider_Type__c',\
+                'preceptorField' => 'RuralPre_Other_Interest__c',\
+                'studentObject' => 'Clinical_Training__c',\
+                'preceptorObject' => 'Contact',\
+                'weight' => 2, // rank from table\
+                'fieldType' => 'text'\
+            \}\
+        \};\
+        \
+        // process each field pair\
+        for(String pairName : fieldPairs.keySet()) \{\
+            Map<String, Object> pairInfo = fieldPairs.get(pairName);\
+            String studentField = (String)pairInfo.get('studentField');\
+            String preceptorField = (String)pairInfo.get('preceptorField');\
+            String studentObjectType = (String)pairInfo.get('studentObject');\
+            String preceptorObjectType = (String)pairInfo.get('preceptorObject');\
+            Integer weight = (Integer)pairInfo.get('weight');\
+            String fieldType = (String)pairInfo.get('fieldType');\
+            \
+            // skip if any object is null\
+            if (studentObjectType == 'Organization' && preceptorOrganization == null) \{\
+                continue;\
+            \}\
+            \
+            // check if the fields exist before attempting to use them\
+            Boolean studentFieldExists = false;\
+            Boolean preceptorFieldExists = false;\
+            \
+            try \{\
+                if (studentObjectType == 'Clinical_Training__c' && student != null) \{\
+                    studentFieldExists = fieldExists(student, studentField);\
+                \} else if (studentObjectType == 'Contact' && studentContact != null) \{\
+                    studentFieldExists = fieldExists(studentContact, studentField);\
+                \}\
+                \
+                if (preceptorObjectType == 'Contact') \{\
+                    preceptorFieldExists = fieldExists(preceptor, preceptorField);\
+                \} else if (preceptorObjectType == 'Organization' && preceptorOrganization != null) \{\
+                    preceptorFieldExists = fieldExists(preceptorOrganization, preceptorField);\
+                \}\
+            \} catch (Exception e) \{\
+                System.debug('Error checking field existence: ' + e.getMessage());\
+                continue;\
+            \}\
+            \
+            // skip if either field doesn't exist\
+            if (!studentFieldExists || !preceptorFieldExists) \{\
+                System.debug('Skipping comparison for ' + pairName + ' due to non-existent fields');\
+                continue;\
+            \}\
+            \
+            // get field values from the appropriate objects\
+            Object studentValue = null;\
+            Object preceptorValue = null;\
+            \
+            try \{\
+                if (studentObjectType == 'Clinical_Training__c') \{\
+                    studentValue = student.get(studentField);\
+                \} else if (studentObjectType == 'Contact') \{\
+                    studentValue = studentContact.get(studentField);\
+                \}\
+                \
+                if (preceptorObjectType == 'Contact') \{\
+                    preceptorValue = preceptor.get(preceptorField);\
+                \} else if (preceptorObjectType == 'Organization' && preceptorOrganization != null) \{\
+                    preceptorValue = preceptorOrganization.get(preceptorField);\
+                \}\
+            \} catch(Exception e) \{\
+                System.debug('Field access error for ' + pairName + ': ' + e.getMessage());\
+                continue; // skip if field doesn't exist\
+            \}\
+            \
+            if(studentValue == null || preceptorValue == null) \{\
+                System.debug('Skipping comparison for ' + pairName + ' due to null values');\
+                continue; // skip if either value is null\
+            \}\
+            \
+            Decimal similarity = 0;\
+            \
+            // calculate similarity based on field type\
+            if(fieldType == 'text') \{\
+                String studentText = String.valueOf(studentValue).toLowerCase();\
+                String preceptorText = String.valueOf(preceptorValue).toLowerCase();\
+                similarity = textSimilarity(studentText, preceptorText);\
+                \
+                // debug the field comparison\
+                System.debug('Field pair ' + pairName + ' - Similarity: ' + similarity + \
+                         ' - Student value: ' + studentText + \
+                         ' - Preceptor value: ' + preceptorText);\
+            \}\
+            else if(fieldType == 'picklist') \{\
+                String studentText = String.valueOf(studentValue).toLowerCase();\
+                String preceptorText = String.valueOf(preceptorValue).toLowerCase();\
+                \
+                // for picklists, check for partial matches (values can be multi-select)\
+                List<String> studentValues = studentText.split(';');\
+                List<String> preceptorValues = preceptorText.split(';');\
+                \
+                Integer matches = 0;\
+                for(String sValue : studentValues) \{\
+                    sValue = sValue.trim();\
+                    for(String pValue : preceptorValues) \{\
+                        pValue = pValue.trim();\
+                        if(sValue == pValue || sValue.contains(pValue) || pValue.contains(sValue)) \{\
+                            matches++;\
+                            break;\
+                        \}\
+                    \}\
+                \}\
+                \
+                if(studentValues.size() > 0) \{\
+                    similarity = (matches * 100.0) / studentValues.size();\
+                \}\
+            \}\
+            else if(fieldType == 'date') \{\
+                // handle different ways dates might be stored\
+                Date studentDate;\
+                Date preceptorDate;\
+                \
+                try \{\
+                    if (studentValue instanceof Date) \{\
+                        studentDate = (Date)studentValue;\
+                    \} else \{\
+                        // try to parse date from string\
+                        String dateStr = String.valueOf(studentValue);\
+                        studentDate = Date.valueOf(dateStr);\
+                    \}\
+                    \
+                    if (preceptorValue instanceof Date) \{\
+                        preceptorDate = (Date)preceptorValue;\
+                    \} else \{\
+                        // try to parse date from string\
+                        String dateStr = String.valueOf(preceptorValue);\
+                        preceptorDate = Date.valueOf(dateStr);\
+                    \}\
+                    \
+                    Integer daysDiff = Math.abs(studentDate.daysBetween(preceptorDate));\
+                    // higher similarity for dates closer together\
+                    similarity = Math.max(0, 100 - ((daysDiff * 100.0) / 30)); // Within 30 days is good\
+                \} catch(Exception e) \{\
+                    System.debug('Date parsing error: ' + e.getMessage());\
+                    continue; // skip this comparison if dates can't be parsed\
+                \}\
+            \}\
+            \
+            // Apply weight\
+            totalWeightedScore += (similarity / 100) * weight;\
+            totalPossibleScore += weight;\
+        \}\
+        \
+        // calculate final score\
+        if(totalPossibleScore == 0) return 0;\
+        \
+        Decimal percentScore = (totalWeightedScore / totalPossibleScore) * 100;\
+        \
+        // debug final score calculation\
+        System.debug('Final match score: ' + percentScore.setScale(1) + ' (Weighted score: ' + totalWeightedScore + \
+                 ' out of possible: ' + totalPossibleScore + ')');\
+        \
+        return percentScore.setScale(1);\
+    \}\
+    \
+    // helper method to check if a field exists on an SObject\
+    @TestVisible\
+    private static Boolean fieldExists(SObject obj, String fieldName) \{\
+        if (obj == null) return false;\
+        \
+        try \{\
+            Object value = obj.get(fieldName);\
+            return true;\
+        \} catch(Exception e) \{\
+            return false;\
+        \}\
+    \}\
+    \
+    // text similarity using Levenshtein distance\
+    @TestVisible\
+    private static Decimal textSimilarity(String text1, String text2) \{\
+        if(text1 == null) text1 = '';\
+        if(text2 == null) text2 = '';\
+        \
+        // convert to lowercase\
+        text1 = text1.toLowerCase();\
+        text2 = text2.toLowerCase();\
+        \
+        Integer distance = levenshteinDistance(text1, text2);\
+        \
+        // calculate similarity percentage\
+        Integer maxLength = Math.max(text1.length(), text2.length());\
+        if(maxLength == 0) return 100;\
+        \
+        Decimal similarity = ((maxLength - distance) * 100.0) / maxLength;\
+        return similarity.setScale(1);\
+    \}\
+\
+    // levenshtein distance implementation\
+    private static Integer levenshteinDistance(String s, String t) \{\
+        Integer m = s.length();\
+        Integer n = t.length();\
+        \
+        List<List<Integer>> d = new List<List<Integer>>();\
+        \
+        for(Integer i = 0; i <= m; i++) \{\
+            List<Integer> row = new List<Integer>();\
+            for(Integer j = 0; j <= n; j++) \{\
+                row.add(0);\
+            \}\
+            d.add(row);\
+        \}\
+        \
+        for(Integer i = 0; i <= m; i++) \{\
+            d[i][0] = i;\
+        \}\
+        \
+        for(Integer j = 0; j <= n; j++) \{\
+            d[0][j] = j;\
+        \}\
+        \
+        for(Integer j = 1; j <= n; j++) \{\
+            for(Integer i = 1; i <= m; i++) \{\
+                Integer cost = (s.substring(i-1, i) == t.substring(j-1, j)) ? 0 : 1;\
+                d[i][j] = Math.min(\
+                    Math.min(d[i-1][j] + 1, d[i][j-1] + 1),\
+                    d[i-1][j-1] + cost\
+                );\
+            \}\
+        \}\
+        \
+        return d[m][n];\
+    \} \
+    \
+    // request class for approving/assigning matches\
+    public class AssignmentRequest \{\
+        @InvocableVariable(required=true)\
+        public Id studentId;\
+        \
+        @InvocableVariable(required=true)\
+        public Id preceptorId;\
+        \
+        @InvocableVariable(required=false)\
+        public Decimal matchScore;\
+    \}\
+\}}
