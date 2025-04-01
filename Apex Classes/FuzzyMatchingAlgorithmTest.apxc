@@ -1,156 +1,149 @@
-{\rtf1\ansi\ansicpg1252\cocoartf2761
-\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
-{\colortbl;\red255\green255\blue255;}
-{\*\expandedcolortbl;;}
-\margl1440\margr1440\vieww11520\viewh8400\viewkind0
-\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
-
-\f0\fs24 \cf0 @isTest\
-private class FuzzyMatchingAlgorithmTest \{\
-    \
-    // All tests in a single method to minimize setup/teardown and SOQL queries\
-    @isTest\
-    static void testFuzzyMatchingAlgorithm() \{\
-        Test.startTest();\
-        \
-        // Test the PreceptorMatch class\
-        FuzzyMatchingAlgorithm.PreceptorMatch match1 = new FuzzyMatchingAlgorithm.PreceptorMatch(\
-            '001000000000001', 'Preceptor 1', 85.5, '001000000000002');\
-        \
-        FuzzyMatchingAlgorithm.PreceptorMatch match2 = new FuzzyMatchingAlgorithm.PreceptorMatch(\
-            '001000000000003', 'Preceptor 2', 75.0, '001000000000004');\
-        \
-        FuzzyMatchingAlgorithm.PreceptorMatch match3 = new FuzzyMatchingAlgorithm.PreceptorMatch(\
-            '001000000000005', 'Preceptor 3', 85.5, '001000000000006');\
-        \
-        // Test compareTo functionality\
-        System.assertEquals(-1, match1.compareTo(match2), 'Higher score should return -1');\
-        System.assertEquals(1, match2.compareTo(match1), 'Lower score should return 1');\
-        System.assertEquals(0, match1.compareTo(match3), 'Equal scores should return 0');\
-        \
-        // Test the AssignmentRequest class\
-        FuzzyMatchingAlgorithm.AssignmentRequest req = new FuzzyMatchingAlgorithm.AssignmentRequest();\
-        req.studentId = '001000000000001';\
-        req.preceptorId = '003000000000001';\
-        req.matchScore = 75.0;\
-        \
-        System.assertNotEquals(null, req, 'Assignment request should be created successfully');\
-        System.assertNotEquals(null, req.studentId, 'Student ID should be set');\
-        System.assertNotEquals(null, req.preceptorId, 'Preceptor ID should be set');\
-        System.assertEquals(75.0, req.matchScore, 'Match score should be set correctly');\
-        \
-        // Test the FlowMatchWrapper class\
-        FlowMatchWrapper wrapper = new FlowMatchWrapper('001000000000001', 'Test Preceptor', 85.5, '001000000000002');\
-        System.assertEquals('001000000000001', wrapper.preceptorId, 'Preceptor ID should be set correctly');\
-        System.assertEquals('85.5%', wrapper.scoreText, 'Score text should be formatted correctly');\
-        \
-        // Create mock objects for testing the main algorithm\
-        Contact preceptorContact = new Contact(\
-            Id = Contact.SObjectType.getDescribe().getKeyPrefix() + '000000000001',\
-            FirstName = 'Test',\
-            LastName = 'Preceptor',\
-            Preceptor_Title__c = 'Family Medicine',\
-            Title = 'Dr.',\
-            Description = 'Experienced physician'\
-        );\
-        \
-        Contact studentContact = new Contact(\
-            Id = Contact.SObjectType.getDescribe().getKeyPrefix() + '000000000002',\
-            FirstName = 'Test',\
-            LastName = 'Student',\
-            Education_Level__c = 'Undergraduate',\
-            Educational_Program_Primary_Discipline__c = 'MD'\
-        );\
-        \
-        Clinical_Training__c student = new Clinical_Training__c(\
-            Id = Clinical_Training__c.SObjectType.getDescribe().getKeyPrefix() + '000000000001',\
-            RuralStu_Specialty_Entering__c = 'Family Medicine',\
-            RuralStu_Specialty_Interest__c = 'Family Medicine',\
-            RuralStu_Year_Category__c = 'year 3',\
-            RuralStu_Additional_Information__c = 'Test information'\
-        );\
-        \
-        // Create the request\
-        FuzzyMatchingAlgorithm.MatchRequest request = new FuzzyMatchingAlgorithm.MatchRequest();\
-        request.student = student;\
-        request.studentContact = studentContact;\
-        request.preceptors = new List<Contact>\{ preceptorContact \};\
-        request.preceptorOrganizations = new List<Organization>(); \
-        request.minimumScore = 0.0; // Set to zero to ensure matches\
-        \
-        // Execute the method\
-        List<FuzzyMatchingAlgorithm.MatchResult> results = FuzzyMatchingAlgorithm.calculateMatches(new List<FuzzyMatchingAlgorithm.MatchRequest>\{request\});\
-        \
-        // Basic assertions\
-        System.assertNotEquals(null, results, 'Results should not be null');\
-        System.assertEquals(1, results.size(), 'Should have one result set');\
-        System.assertEquals(student.Id, results[0].studentId, 'Student ID should match');\
-        \
-        // Test the newly added matchPercentage output variable\
-        System.assertNotEquals(null, results[0].matchPercentage, 'Match percentage should not be null');\
-        System.assert(results[0].matchPercentage >= 0, 'Match percentage should be a positive number');\
-        \
-        // Test top match variables\
-        if (results[0].matches.size() > 0) \{\
-            System.assertEquals(results[0].matches[0].preceptorId, results[0].topPreceptorId, 'Top preceptor ID should match');\
-            System.assertEquals(results[0].matches[0].preceptorName, results[0].topPreceptorName, 'Top preceptor name should match');\
-            System.assertEquals(results[0].matches[0].score, results[0].topMatchScore, 'Top match score should match');\
-            System.assertNotEquals(null, results[0].matchesJson, 'Matches JSON should not be null');\
-            \
-            // Test the Flow matches collection\
-            System.assertNotEquals(null, results[0].flowMatches, 'Flow matches should not be null');\
-            \
-            // If flowMatches is populated, test the scoreText field\
-            if (results[0].flowMatches != null && !results[0].flowMatches.isEmpty()) \{\
-                FlowMatchWrapper firstMatch = results[0].flowMatches[0];\
-                System.assertNotEquals(null, firstMatch.scoreText, 'Score text should not be null');\
-                // Verify that the scoreText contains the expected format (number + %)\
-                System.assert(firstMatch.scoreText.endsWith('%'), 'Score text should end with % symbol');\
-                // Verify that the numeric part matches the score value\
-                String numericPart = firstMatch.scoreText.substring(0, firstMatch.scoreText.length() - 1);\
-                Decimal parsedValue = Decimal.valueOf(numericPart);\
-                System.assertEquals(firstMatch.matchScore.setScale(1), parsedValue, 'Numeric part of the score text should match the score value');\
-            \}\
-        \}\
-        \
-        // Test with empty preceptors\
-        FuzzyMatchingAlgorithm.MatchRequest emptyRequest = new FuzzyMatchingAlgorithm.MatchRequest();\
-        emptyRequest.student = student;\
-        emptyRequest.studentContact = studentContact;\
-        emptyRequest.preceptors = new List<Contact>();\
-        emptyRequest.preceptorOrganizations = new List<Organization>();\
-        \
-        List<FuzzyMatchingAlgorithm.MatchResult> emptyResults = FuzzyMatchingAlgorithm.calculateMatches(new List<FuzzyMatchingAlgorithm.MatchRequest>\{emptyRequest\});\
-        \
-        // Verify results for empty case\
-        System.assertEquals(1, emptyResults.size(), 'Should have one result set for empty case');\
-        System.assertEquals(0, emptyResults[0].matches.size(), 'Should have no matches for empty preceptor list');\
-        System.assertEquals(0, emptyResults[0].matchPercentage, 'Match percentage should be 0 for empty preceptor list');\
-        \
-        // Test text similarity and field existence - directly calling the methods\
-        // since we've added @TestVisible to them\
-        Decimal similarity = FuzzyMatchingAlgorithm.textSimilarity('test', 'testing');\
-        System.assertNotEquals(null, similarity, 'Similarity score should not be null');\
-        \
-        Boolean exists = FuzzyMatchingAlgorithm.fieldExists(student, 'RuralStu_Specialty_Entering__c');\
-        System.assertEquals(true, exists, 'Field should exist');\
-        \
-        Boolean notExists = FuzzyMatchingAlgorithm.fieldExists(student, 'NonExistentField__c');\
-        System.assertEquals(false, notExists, 'Field should not exist');\
-        \
-        Test.stopTest();\
-    \}\
-    \
-    // Test method for exposing private methods for coverage\
-    private class TestHelper \{\
-        // Access private methods of FuzzyMatchingAlgorithm for testing\
-        \
-        public Decimal testTextSimilarity(String text1, String text2) \{\
-            return FuzzyMatchingAlgorithm.textSimilarity(text1, text2);\
-        \}\
-        \
-        public Boolean testFieldExists(SObject obj, String fieldName) \{\
-            return FuzzyMatchingAlgorithm.fieldExists(obj, fieldName);\
-        \}\
-    \}\
-\}}
+@isTest
+private class FuzzyMatchingAlgorithmTest {
+    
+    // All tests in a single method to minimize setup/teardown and SOQL queries
+    @isTest
+    static void testFuzzyMatchingAlgorithm() {
+        Test.startTest();
+        
+        // Test the PreceptorMatch class
+        FuzzyMatchingAlgorithm.PreceptorMatch match1 = new FuzzyMatchingAlgorithm.PreceptorMatch(
+            '001000000000001', 'Preceptor 1', 85.5, '001000000000002');
+        
+        FuzzyMatchingAlgorithm.PreceptorMatch match2 = new FuzzyMatchingAlgorithm.PreceptorMatch(
+            '001000000000003', 'Preceptor 2', 75.0, '001000000000004');
+        
+        FuzzyMatchingAlgorithm.PreceptorMatch match3 = new FuzzyMatchingAlgorithm.PreceptorMatch(
+            '001000000000005', 'Preceptor 3', 85.5, '001000000000006');
+        
+        // Test compareTo functionality
+        System.assertEquals(-1, match1.compareTo(match2), 'Higher score should return -1');
+        System.assertEquals(1, match2.compareTo(match1), 'Lower score should return 1');
+        System.assertEquals(0, match1.compareTo(match3), 'Equal scores should return 0');
+        
+        // Test the AssignmentRequest class
+        FuzzyMatchingAlgorithm.AssignmentRequest req = new FuzzyMatchingAlgorithm.AssignmentRequest();
+        req.studentId = '001000000000001';
+        req.preceptorId = '003000000000001';
+        req.matchScore = 75.0;
+        
+        System.assertNotEquals(null, req, 'Assignment request should be created successfully');
+        System.assertNotEquals(null, req.studentId, 'Student ID should be set');
+        System.assertNotEquals(null, req.preceptorId, 'Preceptor ID should be set');
+        System.assertEquals(75.0, req.matchScore, 'Match score should be set correctly');
+        
+        // Test the FlowMatchWrapper class
+        FlowMatchWrapper wrapper = new FlowMatchWrapper('001000000000001', 'Test Preceptor', 85.5, '001000000000002');
+        System.assertEquals('001000000000001', wrapper.preceptorId, 'Preceptor ID should be set correctly');
+        System.assertEquals('85.5%', wrapper.scoreText, 'Score text should be formatted correctly');
+        
+        // Create mock objects for testing the main algorithm
+        Contact preceptorContact = new Contact(
+            Id = Contact.SObjectType.getDescribe().getKeyPrefix() + '000000000001',
+            FirstName = 'Test',
+            LastName = 'Preceptor',
+            Preceptor_Title__c = 'Family Medicine',
+            Title = 'Dr.',
+            Description = 'Experienced physician'
+        );
+        
+        Contact studentContact = new Contact(
+            Id = Contact.SObjectType.getDescribe().getKeyPrefix() + '000000000002',
+            FirstName = 'Test',
+            LastName = 'Student',
+            Education_Level__c = 'Undergraduate',
+            Educational_Program_Primary_Discipline__c = 'MD'
+        );
+        
+        Clinical_Training__c student = new Clinical_Training__c(
+            Id = Clinical_Training__c.SObjectType.getDescribe().getKeyPrefix() + '000000000001',
+            RuralStu_Specialty_Entering__c = 'Family Medicine',
+            RuralStu_Specialty_Interest__c = 'Family Medicine',
+            RuralStu_Year_Category__c = 'year 3',
+            RuralStu_Additional_Information__c = 'Test information'
+        );
+        
+        // Create the request
+        FuzzyMatchingAlgorithm.MatchRequest request = new FuzzyMatchingAlgorithm.MatchRequest();
+        request.student = student;
+        request.studentContact = studentContact;
+        request.preceptors = new List<Contact>{ preceptorContact };
+        request.preceptorOrganizations = new List<Organization>(); 
+        request.minimumScore = 0.0; // Set to zero to ensure matches
+        
+        // Execute the method
+        List<FuzzyMatchingAlgorithm.MatchResult> results = FuzzyMatchingAlgorithm.calculateMatches(new List<FuzzyMatchingAlgorithm.MatchRequest>{request});
+        
+        // Basic assertions
+        System.assertNotEquals(null, results, 'Results should not be null');
+        System.assertEquals(1, results.size(), 'Should have one result set');
+        System.assertEquals(student.Id, results[0].studentId, 'Student ID should match');
+        
+        // Test the newly added matchPercentage output variable
+        System.assertNotEquals(null, results[0].matchPercentage, 'Match percentage should not be null');
+        System.assert(results[0].matchPercentage >= 0, 'Match percentage should be a positive number');
+        
+        // Test top match variables
+        if (results[0].matches.size() > 0) {
+            System.assertEquals(results[0].matches[0].preceptorId, results[0].topPreceptorId, 'Top preceptor ID should match');
+            System.assertEquals(results[0].matches[0].preceptorName, results[0].topPreceptorName, 'Top preceptor name should match');
+            System.assertEquals(results[0].matches[0].score, results[0].topMatchScore, 'Top match score should match');
+            System.assertNotEquals(null, results[0].matchesJson, 'Matches JSON should not be null');
+            
+            // Test the Flow matches collection
+            System.assertNotEquals(null, results[0].flowMatches, 'Flow matches should not be null');
+            
+            // If flowMatches is populated, test the scoreText field
+            if (results[0].flowMatches != null && !results[0].flowMatches.isEmpty()) {
+                FlowMatchWrapper firstMatch = results[0].flowMatches[0];
+                System.assertNotEquals(null, firstMatch.scoreText, 'Score text should not be null');
+                // Verify that the scoreText contains the expected format (number + %)
+                System.assert(firstMatch.scoreText.endsWith('%'), 'Score text should end with % symbol');
+                // Verify that the numeric part matches the score value
+                String numericPart = firstMatch.scoreText.substring(0, firstMatch.scoreText.length() - 1);
+                Decimal parsedValue = Decimal.valueOf(numericPart);
+                System.assertEquals(firstMatch.matchScore.setScale(1), parsedValue, 'Numeric part of the score text should match the score value');
+            }
+        }
+        
+        // Test with empty preceptors
+        FuzzyMatchingAlgorithm.MatchRequest emptyRequest = new FuzzyMatchingAlgorithm.MatchRequest();
+        emptyRequest.student = student;
+        emptyRequest.studentContact = studentContact;
+        emptyRequest.preceptors = new List<Contact>();
+        emptyRequest.preceptorOrganizations = new List<Organization>();
+        
+        List<FuzzyMatchingAlgorithm.MatchResult> emptyResults = FuzzyMatchingAlgorithm.calculateMatches(new List<FuzzyMatchingAlgorithm.MatchRequest>{emptyRequest});
+        
+        // Verify results for empty case
+        System.assertEquals(1, emptyResults.size(), 'Should have one result set for empty case');
+        System.assertEquals(0, emptyResults[0].matches.size(), 'Should have no matches for empty preceptor list');
+        System.assertEquals(0, emptyResults[0].matchPercentage, 'Match percentage should be 0 for empty preceptor list');
+        
+        // Test text similarity and field existence - directly calling the methods
+        // since we've added @TestVisible to them
+        Decimal similarity = FuzzyMatchingAlgorithm.textSimilarity('test', 'testing');
+        System.assertNotEquals(null, similarity, 'Similarity score should not be null');
+        
+        Boolean exists = FuzzyMatchingAlgorithm.fieldExists(student, 'RuralStu_Specialty_Entering__c');
+        System.assertEquals(true, exists, 'Field should exist');
+        
+        Boolean notExists = FuzzyMatchingAlgorithm.fieldExists(student, 'NonExistentField__c');
+        System.assertEquals(false, notExists, 'Field should not exist');
+        
+        Test.stopTest();
+    }
+    
+    // Test method for exposing private methods for coverage
+    private class TestHelper {
+        // Access private methods of FuzzyMatchingAlgorithm for testing
+        
+        public Decimal testTextSimilarity(String text1, String text2) {
+            return FuzzyMatchingAlgorithm.textSimilarity(text1, text2);
+        }
+        
+        public Boolean testFieldExists(SObject obj, String fieldName) {
+            return FuzzyMatchingAlgorithm.fieldExists(obj, fieldName);
+        }
+    }
+}
