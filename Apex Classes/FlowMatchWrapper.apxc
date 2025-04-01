@@ -1,55 +1,48 @@
-{\rtf1\ansi\ansicpg1252\cocoartf2761
-\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
-{\colortbl;\red255\green255\blue255;}
-{\*\expandedcolortbl;;}
-\margl1440\margr1440\vieww11520\viewh8400\viewkind0
-\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
-
-\f0\fs24 \cf0 /**\
- * Separate class to hold preceptor match data for use in Flows\
- */\
-global class FlowMatchWrapper \{\
-    @AuraEnabled\
-    @InvocableVariable(label='Preceptor ID' description='ID of the preceptor' required=true)\
-    global String preceptorId;\
-    \
-    @AuraEnabled\
-    @InvocableVariable(label='Preceptor Name' description='Name of the preceptor' required=true)\
-    global String preceptorName;\
-    \
-    @AuraEnabled\
-    @InvocableVariable(label='Specialty' description='Preceptor specialty' required=false)\
-    global String specialty;\
-    \
-    @AuraEnabled\
-    @InvocableVariable(label='Match Score' description='Match percentage score' required=true)\
-    global Decimal matchScore;\
-    \
-    @AuraEnabled\
-    @InvocableVariable(label='Match Percentage' description='Formatted match percentage score' required=true)\
-    global String scoreText;\
-    \
-    @AuraEnabled\
-    @InvocableVariable(label='Account ID' description='ID of the account' required=false)\
-    global String accountId;\
-    \
-    /**\
-     * Default constructor for Flow\
-     */\
-    global FlowMatchWrapper() \{\
-        // Empty constructor required for Flow\
-        this.specialty = '';\
-    \}\
-    \
-    /**\
-     * Constructor to create from preceptor data\
-     */\
-    global FlowMatchWrapper(String preceptorId, String preceptorName, Decimal matchScore, String accountId) \{\
-        this.preceptorId = preceptorId;\
-        this.preceptorName = preceptorName;\
-        this.matchScore = matchScore;\
-        this.scoreText = matchScore != null ? matchScore.setScale(1) + '%' : '0%';\
-        this.accountId = accountId;\
-        this.specialty = '';  // Initialize specialty field\
-    \}\
-\}}
+/**
+ * Separate class to hold preceptor match data for use in Flows
+ */
+global class FlowMatchWrapper {
+    @AuraEnabled
+    @InvocableVariable(label='Preceptor ID' description='ID of the preceptor' required=true)
+    global String preceptorId;
+    
+    @AuraEnabled
+    @InvocableVariable(label='Preceptor Name' description='Name of the preceptor' required=true)
+    global String preceptorName;
+    
+    @AuraEnabled
+    @InvocableVariable(label='Specialty' description='Preceptor specialty' required=false)
+    global String specialty;
+    
+    @AuraEnabled
+    @InvocableVariable(label='Match Score' description='Match percentage score' required=true)
+    global Decimal matchScore;
+    
+    @AuraEnabled
+    @InvocableVariable(label='Match Percentage' description='Formatted match percentage score' required=true)
+    global String scoreText;
+    
+    @AuraEnabled
+    @InvocableVariable(label='Account ID' description='ID of the account' required=false)
+    global String accountId;
+    
+    /**
+     * Default constructor for Flow
+     */
+    global FlowMatchWrapper() {
+        // Empty constructor required for Flow
+        this.specialty = '';
+    }
+    
+    /**
+     * Constructor to create from preceptor data
+     */
+    global FlowMatchWrapper(String preceptorId, String preceptorName, Decimal matchScore, String accountId) {
+        this.preceptorId = preceptorId;
+        this.preceptorName = preceptorName;
+        this.matchScore = matchScore;
+        this.scoreText = matchScore != null ? matchScore.setScale(1) + '%' : '0%';
+        this.accountId = accountId;
+        this.specialty = '';  // Initialize specialty field
+    }
+}
