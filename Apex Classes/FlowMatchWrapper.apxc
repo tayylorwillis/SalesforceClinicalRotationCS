@@ -1,7 +1,8 @@
-/**
- * Separate class to hold preceptor match data for use in Flows
- */
 global class FlowMatchWrapper {
+     /**
+     * this class contains a lot of unused variables, but is
+     * helpful for the future if needed
+     */
     @AuraEnabled
     @InvocableVariable(label='Preceptor ID' description='ID of the preceptor' required=true)
     global String preceptorId;
@@ -26,16 +27,36 @@ global class FlowMatchWrapper {
     @InvocableVariable(label='Account ID' description='ID of the account' required=false)
     global String accountId;
     
+    @AuraEnabled
+    @InvocableVariable(label='Organization Name' description='Name of the preceptor organization' required=false)
+    global String organizationName;
+    
+    @AuraEnabled
+    @InvocableVariable(label='Primary Match Factors' description='Key factors that contributed to the match' required=false)
+    global String matchFactors;
+    
+    @AuraEnabled
+    @InvocableVariable(label='Site Type' description='Type of preceptor site' required=false)
+    global String siteType;
+    
+    @AuraEnabled
+    @InvocableVariable(label='Preceptor Availability' description='Preceptor availability' required=false)
+    global String availability;
+    
     /**
-     * Default constructor for Flow
+     * default constructor for Flow
      */
     global FlowMatchWrapper() {
-        // Empty constructor required for Flow
+        // empty constructor required for Flow
         this.specialty = '';
+        this.organizationName = '';
+        this.matchFactors = '';
+        this.siteType = '';
+        this.availability = '';
     }
     
     /**
-     * Constructor to create from preceptor data
+     * constructor to create from preceptor data
      */
     global FlowMatchWrapper(String preceptorId, String preceptorName, Decimal matchScore, String accountId) {
         this.preceptorId = preceptorId;
@@ -43,6 +64,27 @@ global class FlowMatchWrapper {
         this.matchScore = matchScore;
         this.scoreText = matchScore != null ? matchScore.setScale(1) + '%' : '0%';
         this.accountId = accountId;
-        this.specialty = '';  // Initialize specialty field
+        this.specialty = '';  // initialize specialty field
+        this.organizationName = '';
+        this.matchFactors = '';
+        this.siteType = '';
+        this.availability = '';
+    }
+    
+    /**
+     * sets the match factors
+     */
+    global void setMatchFactors(List<String> factors) {
+        if(factors == null || factors.isEmpty()) {
+            this.matchFactors = '';
+            return;
+        }
+        
+        List<String> topFactors = new List<String>();
+        for(Integer i = 0; i < Math.min(factors.size(), 3); i++) {
+            topFactors.add(factors[i]);
+        }
+        
+        this.matchFactors = String.join(topFactors, ', ');
     }
 }
