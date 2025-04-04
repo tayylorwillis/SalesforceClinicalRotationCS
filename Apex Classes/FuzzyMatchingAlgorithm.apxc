@@ -1,4 +1,4 @@
-public class FuzzyMatchingAlgorithm {
+global class FuzzyMatchingAlgorithm {
     // main method to be called from the Auto-Launched Flow
     @InvocableMethod(label='Calculate Preceptor Matches' description='Calculates compatibility scores between a student and potential preceptors')
     public static List<MatchResult> calculateMatches(List<MatchRequest> requests) {
@@ -9,15 +9,15 @@ public class FuzzyMatchingAlgorithm {
             Clinical_Training__c student = req.student;
             Contact studentContact = req.studentContact;
             List<Contact> preceptors = req.preceptors;
-            List<Organization> preceptorOrganizations = req.preceptorOrganizations != null ? req.preceptorOrganizations : new List<Organization>();
+            List<Account> organizations = req.organizations != null ? req.organizations : new List<Account>();
             
-            // create a map for easier access to preceptor organizations
-            Map<Id, Organization> organizationMap = new Map<Id, Organization>();
-            Organization lastOrg = null; // Track most recent organization for fallback
+            // create a map for easier access to organizations
+            Map<Id, Account> organizationMap = new Map<Id, Account>();
+            Account lastOrg = null; // track most recent organization for fallback
             
-            for(Organization org : preceptorOrganizations) {
+            for(Account org : organizations) {
                 organizationMap.put(org.Id, org);
-                lastOrg = org; // keep track of most recent org
+                lastOrg = org; // keep track of most recent organization
             }
             
             // calculate compatibility for each preceptor
@@ -25,13 +25,13 @@ public class FuzzyMatchingAlgorithm {
             Decimal highestScore = 0; // Track the highest score
             
             for(Contact preceptor : preceptors) {
-                // get the related Organization for this preceptor
-                Organization preceptorOrganization = null;
+                // find the preceptor's organization based on AccountId
+                Account preceptorOrganization = null;
                 if (preceptor.AccountId != null) {
                     preceptorOrganization = organizationMap.get(preceptor.AccountId);
                 }
                 
-                // fallback to most recently used organization if specific one not found
+                // use fallback if needed
                 if (preceptorOrganization == null && lastOrg != null) {
                     System.debug('Using fallback organization for preceptor: ' + preceptor.Name);
                     preceptorOrganization = lastOrg;
@@ -45,19 +45,18 @@ public class FuzzyMatchingAlgorithm {
                     highestScore = score;
                 }
                 
-                if(score >= req.minimumScore) {
-                    PreceptorMatch preceptorMatch = new PreceptorMatch(
-                        preceptor.Id,
-                        preceptor.Name,
-                        score,
-                        preceptor.AccountId
-                    );
-                    
-                    // set specialty from preceptor
-                    prceptorMatch.specialty = preceptor.Preceptor_Title__c != null ? preceptor.Preceptor_Title__c : '';
-                    
-                    matches.add(preceptorMatch);
-                }
+                // include all preceptors regardless of score
+                PreceptorMatch preceptorMatch = new PreceptorMatch(
+                    preceptor.Id,
+                    preceptor.Name,
+                    score,
+                    preceptor.AccountId
+                );
+                
+                // set specialty from preceptor
+                preceptorMatch.specialty = preceptor.Preceptor_Title__c != null ? preceptor.Preceptor_Title__c : '';
+                
+                matches.add(preceptorMatch);
             }
             
             // sort by score (highest first)
@@ -66,6 +65,20 @@ public class FuzzyMatchingAlgorithm {
             // create a list of FlowMatchWrapper objects (Flow-friendly)
             List<FlowMatchWrapper> flowMatches = new List<FlowMatchWrapper>();
             for (PreceptorMatch match : matches) {
+                Contact matchedPreceptor = null;
+                Account matchedOrganization = null;
+                
+                for(Contact preceptor : preceptors) {
+                    if(preceptor.Id == match.preceptorId) {
+                        matchedPreceptor = preceptor;
+                        
+                        if(preceptor.AccountId != null && organizationMap.containsKey(preceptor.AccountId)) {
+                            matchedOrganization = organizationMap.get(preceptor.AccountId);
+                        }
+                        break;
+                    }
+                }
+                
                 // create wrapper using original constructor
                 FlowMatchWrapper wrapper = new FlowMatchWrapper(
                     String.valueOf(match.preceptorId),
@@ -76,6 +89,36 @@ public class FuzzyMatchingAlgorithm {
                 
                 // set specialty
                 wrapper.specialty = match.specialty;
+                
+                // set additional fields if matched preceptor was found
+                if(matchedPreceptor != null) {
+                    try {
+                        if(fieldExists(matchedPreceptor, 'RuralPre_Availability__c')) {
+                            wrapper.availability = String.valueOf(matchedPreceptor.get('RuralPre_Availability__c'));
+                        } else if(fieldExists(matchedPreceptor, 'Availability__c')) {
+                            wrapper.availability = String.valueOf(matchedPreceptor.get('Availability__c'));
+                        }
+                    } catch(Exception e) {
+                        System.debug('Error accessing availability field: ' + e.getMessage());
+                        wrapper.availability = '';
+                    }
+                        
+                    if(matchedOrganization != null) {
+                        // Try different field name patterns for site type
+                        try {
+                            if(fieldExists(matchedOrganization, 'RuralPre_Type_Of_Site__c')) {
+                                wrapper.siteType = String.valueOf(matchedOrganization.get('RuralPre_Type_Of_Site__c'));
+                            } else if(fieldExists(matchedOrganization, 'Type_Of_Site__c')) {
+                                wrapper.siteType = String.valueOf(matchedOrganization.get('Type_Of_Site__c'));
+                            }
+                        } catch(Exception e) {
+                            System.debug('Error accessing site type field: ' + e.getMessage());
+                            wrapper.siteType = '';
+                        }
+                        
+                        wrapper.organizationName = matchedOrganization.Name;
+                    }
+                }
                 
                 flowMatches.add(wrapper);
             }
@@ -93,7 +136,7 @@ public class FuzzyMatchingAlgorithm {
     }
     
     // input wrapper for the invocable method
-    public class MatchRequest {
+    global class MatchRequest {
         @InvocableVariable(required=true)
         public Clinical_Training__c student;
         
@@ -104,14 +147,14 @@ public class FuzzyMatchingAlgorithm {
         public List<Contact> preceptors;
         
         @InvocableVariable(required=false)
-        public List<Organization> preceptorOrganizations;
+        public List<Account> organizations;
         
         @InvocableVariable(required=false)
-        public Decimal minimumScore = 50.0; // lower threshold to show more potential matches
+        public Decimal minimumScore = 0.0;
     }
     
     // output wrapper for the invocable method
-    public class MatchResult {
+    global class MatchResult {
         @InvocableVariable(required=true)
         public Id studentId;
         
@@ -137,11 +180,11 @@ public class FuzzyMatchingAlgorithm {
         @InvocableVariable
         public Id topAccountId;
         
-        // flow-friendly collection of preceptor matches
+        // collection of preceptor matches
         @InvocableVariable
         public List<FlowMatchWrapper> flowMatches;
         
-        // serialized JSON string of matches for Flow
+        // serialized JSON string of matches
         @InvocableVariable
         public String matchesJson;
         
@@ -149,7 +192,7 @@ public class FuzzyMatchingAlgorithm {
         @InvocableVariable
         public String datatableString;
         
-        // constructor with Flow-friendly matches
+        // constructor with matches
         public MatchResult(
             Id studentId, 
             String studentName, 
@@ -185,7 +228,7 @@ public class FuzzyMatchingAlgorithm {
     }
     
     // match details for a single preceptor
-    public class PreceptorMatch implements Comparable {
+    global class PreceptorMatch implements Comparable {
         @InvocableVariable
         public Id preceptorId;
         
@@ -218,8 +261,72 @@ public class FuzzyMatchingAlgorithm {
         }
     }
     
-    // Calculate the match score between a student and preceptor
-    private static Decimal calculateMatchScore(Clinical_Training__c student, Contact studentContact, Contact preceptor, Organization preceptorOrganization) {
+    // wrapper class for presenting match data
+    global class FlowMatchWrapper {
+        @AuraEnabled
+        @InvocableVariable(label='Preceptor ID' description='ID of the preceptor' required=true)
+        global String preceptorId;
+        
+        @AuraEnabled
+        @InvocableVariable(label='Preceptor Name' description='Name of the preceptor' required=true)
+        global String preceptorName;
+        
+        @AuraEnabled
+        @InvocableVariable(label='Specialty' description='Preceptor specialty' required=false)
+        global String specialty;
+        
+        @AuraEnabled
+        @InvocableVariable(label='Match Score' description='Match percentage score' required=true)
+        global Decimal matchScore;
+        
+        @AuraEnabled
+        @InvocableVariable(label='Match Percentage' description='Formatted match percentage score' required=true)
+        global String scoreText;
+        
+        @AuraEnabled
+        @InvocableVariable(label='Account ID' description='ID of the account' required=false)
+        global String accountId;
+        
+        @AuraEnabled
+        @InvocableVariable(label='Organization Name' description='Name of the preceptor organization' required=false)
+        global String organizationName;
+        
+        @AuraEnabled
+        @InvocableVariable(label='Site Type' description='Type of preceptor site' required=false)
+        global String siteType;
+        
+        @AuraEnabled
+        @InvocableVariable(label='Preceptor Availability' description='Preceptor availability' required=false)
+        global String availability;
+        
+        /**
+         * default constructor for Flow
+         */
+        global FlowMatchWrapper() {
+            this.specialty = '';
+            this.organizationName = '';
+            this.siteType = '';
+            this.availability = '';
+        }
+        
+        /**
+         * constructor to create from preceptor data
+         */
+        global FlowMatchWrapper(String preceptorId, String preceptorName, Decimal matchScore, String accountId) {
+            this.preceptorId = preceptorId;
+            this.preceptorName = preceptorName;
+            this.matchScore = matchScore;
+            this.scoreText = matchScore != null ? matchScore.setScale(1) + '%' : '0%';
+            this.accountId = accountId;
+            this.specialty = '';
+            this.organizationName = '';
+            this.siteType = '';
+            this.availability = '';
+        }
+    }
+    
+    // calculate the match score between a student and preceptor
+    private static Decimal calculateMatchScore(Clinical_Training__c student, Contact studentContact, Contact preceptor, Account preceptorOrganization) {
         Decimal totalWeightedScore = 0;
         Decimal totalPossibleScore = 0;
         
@@ -228,13 +335,13 @@ public class FuzzyMatchingAlgorithm {
         
         // map of field pairs based on available fields from the matching table
         Map<String, Map<String, Object>> fieldPairs = new Map<String, Map<String, Object>>{
-            // independent pairs
+            // independent pairs with updated field types
             'SpecialityEntered' => new Map<String, Object>{
                 'studentField' => 'RuralStu_Specialty_Entering__c',
                 'preceptorField' => 'Preceptor_Title__c',
                 'studentObject' => 'Clinical_Training__c',
                 'preceptorObject' => 'Contact',
-                'weight' => 1, // rank from table
+                'weight' => 3,
                 'fieldType' => 'text'
             },
             'SpecialityInterest' => new Map<String, Object>{
@@ -242,7 +349,7 @@ public class FuzzyMatchingAlgorithm {
                 'preceptorField' => 'Preceptor_Title__c',
                 'studentObject' => 'Clinical_Training__c',
                 'preceptorObject' => 'Contact',
-                'weight' => 4, // rank from table
+                'weight' => 5,
                 'fieldType' => 'text'
             },
             'PreferredDuration' => new Map<String, Object>{
@@ -250,31 +357,31 @@ public class FuzzyMatchingAlgorithm {
                 'preceptorField' => 'RuralPre_Availability__c',
                 'studentObject' => 'Clinical_Training__c',
                 'preceptorObject' => 'Contact',
-                'weight' => 3, // using average since not specified
-                'fieldType' => 'text'
+                'weight' => 1, 
+                'fieldType' => 'date_to_month'
             },
             'PreferredDurationEnd' => new Map<String, Object>{
                 'studentField' => 'RuralStu_End_Date__c',
                 'preceptorField' => 'RuralPre_Specific_Unavailable__c',
                 'studentObject' => 'Clinical_Training__c',
                 'preceptorObject' => 'Contact',
-                'weight' => 3, // using average since not specified
-                'fieldType' => 'text'
+                'weight' => 1,
+                'fieldType' => 'date_to_month'
             },
             'Availability' => new Map<String, Object>{
                 'studentField' => 'RuralStu_Availability__c',
                 'preceptorField' => 'RuralPre_Availability__c',
                 'studentObject' => 'Clinical_Training__c',
                 'preceptorObject' => 'Contact',
-                'weight' => 5, // rank from table
-                'fieldType' => 'text'
+                'weight' => 5,
+                'fieldType' => 'picklist'
             },
             'UnavailableDates' => new Map<String, Object>{
                 'studentField' => 'RuralStu_Availability__c',
                 'preceptorField' => 'RuralPre_Specific_Unavailable__c',
                 'studentObject' => 'Clinical_Training__c',
                 'preceptorObject' => 'Contact',
-                'weight' => 5, // same as Availability
+                'weight' => 5,
                 'fieldType' => 'text'
             },
             'Populations' => new Map<String, Object>{
@@ -282,23 +389,23 @@ public class FuzzyMatchingAlgorithm {
                 'preceptorField' => 'RuralPre_Learner_Opportunities__c',
                 'studentObject' => 'Clinical_Training__c',
                 'preceptorObject' => 'Account',
-                'weight' => 4, // rank from table
-                'fieldType' => 'text'
+                'weight' => 4,
+                'fieldType' => 'picklist'
             },
             'SpecialSkills' => new Map<String, Object>{
                 'studentField' => 'RuralStu_Special_Skills__c',
                 'preceptorField' => 'RuralPre_Skill_Procedures__c',
                 'studentObject' => 'Clinical_Training__c',
                 'preceptorObject' => 'Account',
-                'weight' => 4, // rank from table
-                'fieldType' => 'text'
+                'weight' => 4,
+                'fieldType' => 'picklist'
             },
             'AnyOtherInfo' => new Map<String, Object>{
                 'studentField' => 'RuralStu_Additional_Information__c',
                 'preceptorField' => 'RuralPre_Other_Information__c',
                 'studentObject' => 'Clinical_Training__c',
                 'preceptorObject' => 'Contact',
-                'weight' => 3, // using average since not specified (-)
+                'weight' => 1,
                 'fieldType' => 'text'
             },
             'TypesOfLearners' => new Map<String, Object>{
@@ -306,24 +413,24 @@ public class FuzzyMatchingAlgorithm {
                 'preceptorField' => 'RuralPre_Learner_Preferences__c',
                 'studentObject' => 'Clinical_Training__c',
                 'preceptorObject' => 'Contact',
-                'weight' => 5, // rank from table
-                'fieldType' => 'text'
+                'weight' => 5,
+                'fieldType' => 'picklist'
             },
             'EducationLevel' => new Map<String, Object>{
                 'studentField' => 'Education_Level__c',
                 'preceptorField' => 'RuralPre_Learner_Preferences__c',
                 'studentObject' => 'Contact',
                 'preceptorObject' => 'Contact',
-                'weight' => 5, // rank from table
-                'fieldType' => 'text'
+                'weight' => 5,
+                'fieldType' => 'picklist'
             },
             'LearnerInterest' => new Map<String, Object>{
                 'studentField' => 'Educational_Program_Primary_Discipline__c',
                 'preceptorField' => 'RuralPre_Learner_Interest__c',
                 'studentObject' => 'Contact',
                 'preceptorObject' => 'Contact',
-                'weight' => 5, // rank from table
-                'fieldType' => 'text'
+                'weight' => 5,
+                'fieldType' => 'picklist'
             },
             
             // dependent pairs
@@ -332,15 +439,15 @@ public class FuzzyMatchingAlgorithm {
                 'preceptorField' => 'RuralPre_Serving_Interest__c',
                 'studentObject' => 'Clinical_Training__c',
                 'preceptorObject' => 'Contact',
-                'weight' => 5, // rank from table
-                'fieldType' => 'text'
+                'weight' => 5,
+                'fieldType' => 'picklist' // changed to picklist
             },
             'OtherSkills' => new Map<String, Object>{
                 'studentField' => 'RuralStu_Other_Specialty__c',
                 'preceptorField' => 'RuralPre_Other_Skills_Procedures__c',
                 'studentObject' => 'Clinical_Training__c',
                 'preceptorObject' => 'Account',
-                'weight' => 3, // rank from table
+                'weight' => 3,
                 'fieldType' => 'text'
             },
             'OtherOpportunities' => new Map<String, Object>{
@@ -348,7 +455,7 @@ public class FuzzyMatchingAlgorithm {
                 'preceptorField' => 'RuralPre_Other_Opportunities__c',
                 'studentObject' => 'Clinical_Training__c',
                 'preceptorObject' => 'Account',
-                'weight' => 3, // rank from table
+                'weight' => 3,
                 'fieldType' => 'text'
             },
             'OtherLearner' => new Map<String, Object>{
@@ -356,7 +463,7 @@ public class FuzzyMatchingAlgorithm {
                 'preceptorField' => 'RuralPre_Other_Learner__c',
                 'studentObject' => 'Contact',
                 'preceptorObject' => 'Contact',
-                'weight' => 3, // rank from table
+                'weight' => 3,
                 'fieldType' => 'text'
             },
             'OtherProviderType' => new Map<String, Object>{
@@ -364,10 +471,12 @@ public class FuzzyMatchingAlgorithm {
                 'preceptorField' => 'RuralPre_Other_Interest__c',
                 'studentObject' => 'Clinical_Training__c',
                 'preceptorObject' => 'Contact',
-                'weight' => 2, // rank from table
+                'weight' => 2,
                 'fieldType' => 'text'
             }
         };
+        
+        Map<String, Decimal> factorScores = new Map<String, Decimal>();
         
         // process each field pair
         for(String pairName : fieldPairs.keySet()) {
@@ -379,8 +488,8 @@ public class FuzzyMatchingAlgorithm {
             Integer weight = (Integer)pairInfo.get('weight');
             String fieldType = (String)pairInfo.get('fieldType');
             
-            // skip if any object is null
-            if (studentObjectType == 'Organization' && preceptorOrganization == null) {
+            // skip if organization is needed but not available
+            if (preceptorObjectType == 'Account' && preceptorOrganization == null) {
                 continue;
             }
             
@@ -397,7 +506,7 @@ public class FuzzyMatchingAlgorithm {
                 
                 if (preceptorObjectType == 'Contact') {
                     preceptorFieldExists = fieldExists(preceptor, preceptorField);
-                } else if (preceptorObjectType == 'Organization' && preceptorOrganization != null) {
+                } else if (preceptorObjectType == 'Account' && preceptorOrganization != null) {
                     preceptorFieldExists = fieldExists(preceptorOrganization, preceptorField);
                 }
             } catch (Exception e) {
@@ -424,7 +533,7 @@ public class FuzzyMatchingAlgorithm {
                 
                 if (preceptorObjectType == 'Contact') {
                     preceptorValue = preceptor.get(preceptorField);
-                } else if (preceptorObjectType == 'Organization' && preceptorOrganization != null) {
+                } else if (preceptorObjectType == 'Account' && preceptorOrganization != null) {
                     preceptorValue = preceptorOrganization.get(preceptorField);
                 }
             } catch(Exception e) {
@@ -450,64 +559,105 @@ public class FuzzyMatchingAlgorithm {
                          ' - Student value: ' + studentText + 
                          ' - Preceptor value: ' + preceptorText);
             }
+                        else if(fieldType == 'date_to_month') {
+                // special handling for comparing dates to month availability
+                String studentDateStr = String.valueOf(studentValue);
+                String preceptorText = String.valueOf(preceptorValue).toLowerCase();
+                
+                // extract month from date string
+                String studentMonth = extractMonthFromDate(studentDateStr);
+                
+                if(String.isNotBlank(studentMonth)) {
+                    // Check if the extracted month is in the preceptor's availability
+                    List<String> preceptorMonths = preceptorText.split(';');
+                    Boolean monthFound = false;
+                    Decimal bestMonthSimilarity = 0;
+                    
+                    for(String pMonth : preceptorMonths) {
+                        pMonth = pMonth.trim();
+                        
+                        // Calculate similarity between student month and preceptor month
+                        Decimal monthSimilarity = textSimilarity(studentMonth, pMonth);
+                        if(monthSimilarity > bestMonthSimilarity) {
+                            bestMonthSimilarity = monthSimilarity;
+                        }
+                        
+                        // If we find an exact or close match
+                        if(monthSimilarity >= 70) {
+                            monthFound = true;
+                            break;
+                        }
+                    }
+                    
+                    similarity = monthFound ? 100 : bestMonthSimilarity;
+                    
+                    System.debug('Date to Month comparison for ' + pairName +
+                             ' - Student date: ' + studentDateStr +
+                             ' - Extracted month: ' + studentMonth +
+                             ' - Preceptor months: ' + preceptorText +
+                             ' - Similarity: ' + similarity);
+                } else {
+                    // fall back to text similarity if month extraction fails
+                    similarity = textSimilarity(studentDateStr, preceptorText);
+                    System.debug('Date extraction failed for ' + studentDateStr +
+                             ' - Falling back to text similarity: ' + similarity);
+                }
+            }
             else if(fieldType == 'picklist') {
                 String studentText = String.valueOf(studentValue).toLowerCase();
                 String preceptorText = String.valueOf(preceptorValue).toLowerCase();
                 
-                // for picklists, check for partial matches (values can be multi-select)
+                // for picklists, check for partial matches
                 List<String> studentValues = studentText.split(';');
                 List<String> preceptorValues = preceptorText.split(';');
                 
-                Integer matches = 0;
+                // trim whitespace from each value
+                for(Integer i = 0; i < studentValues.size(); i++) {
+                    studentValues[i] = studentValues[i].trim();
+                }
+                for(Integer i = 0; i < preceptorValues.size(); i++) {
+                    preceptorValues[i] = preceptorValues[i].trim();
+                }
+                
+                Decimal matches = 0;
                 for(String sValue : studentValues) {
-                    sValue = sValue.trim();
+                    if(String.isEmpty(sValue)) continue;
+                    
+                    Decimal bestSimilarity = 0;
                     for(String pValue : preceptorValues) {
-                        pValue = pValue.trim();
-                        if(sValue == pValue || sValue.contains(pValue) || pValue.contains(sValue)) {
-                            matches++;
+                        if(String.isEmpty(pValue)) continue;
+                        
+                        if(sValue == pValue) {
+                            bestSimilarity = 100; // exact match
                             break;
+                        } else {
+                            // calculate fuzzy match similarity
+                            Decimal currentSimilarity = textSimilarity(sValue, pValue);
+                            if(currentSimilarity > bestSimilarity) {
+                                bestSimilarity = currentSimilarity;
+                            }
                         }
                     }
+                    
+                    // count match with proportional weight based on similarity
+                    matches += (bestSimilarity / 100);
                 }
                 
                 if(studentValues.size() > 0) {
                     similarity = (matches * 100.0) / studentValues.size();
                 }
-            }
-            else if(fieldType == 'date') {
-                // handle different ways dates might be stored
-                Date studentDate;
-                Date preceptorDate;
                 
-                try {
-                    if (studentValue instanceof Date) {
-                        studentDate = (Date)studentValue;
-                    } else {
-                        // try to parse date from string
-                        String dateStr = String.valueOf(studentValue);
-                        studentDate = Date.valueOf(dateStr);
-                    }
-                    
-                    if (preceptorValue instanceof Date) {
-                        preceptorDate = (Date)preceptorValue;
-                    } else {
-                        // try to parse date from string
-                        String dateStr = String.valueOf(preceptorValue);
-                        preceptorDate = Date.valueOf(dateStr);
-                    }
-                    
-                    Integer daysDiff = Math.abs(studentDate.daysBetween(preceptorDate));
-                    // higher similarity for dates closer together
-                    similarity = Math.max(0, 100 - ((daysDiff * 100.0) / 30)); // Within 30 days is good
-                } catch(Exception e) {
-                    System.debug('Date parsing error: ' + e.getMessage());
-                    continue; // skip this comparison if dates can't be parsed
-                }
+                // debug picklist comparison
+                System.debug('Picklist comparison for ' + pairName + ' - Matching items: ' + matches + 
+                         ' out of ' + studentValues.size() + ' student values. Similarity: ' + similarity);
             }
             
-            // Apply weight
-            totalWeightedScore += (similarity / 100) * weight;
+            // apply weight
+            Decimal weightedScore = (similarity / 100) * weight;
+            totalWeightedScore += weightedScore;
             totalPossibleScore += weight;
+            
+            factorScores.put(pairName, weightedScore);
         }
         
         // calculate final score
@@ -535,7 +685,7 @@ public class FuzzyMatchingAlgorithm {
         }
     }
     
-    // text similarity using Levenshtein distance
+    // text similarity, multiple approaches
     @TestVisible
     private static Decimal textSimilarity(String text1, String text2) {
         if(text1 == null) text1 = '';
@@ -545,6 +695,65 @@ public class FuzzyMatchingAlgorithm {
         text1 = text1.toLowerCase();
         text2 = text2.toLowerCase();
         
+        // early return for exact matches
+        if(text1 == text2) return 100.0;
+        
+        // very short strings, direct comparisons
+        if(text1.length() < 5 || text2.length() < 5) {
+            if(text1.contains(text2) || text2.contains(text1)) {
+                return 90.0;
+            }
+        }
+        
+        // longer strings, word-based similarity
+        if(text1.length() > 10 && text2.length() > 10) {
+            // split into words and compare word sets
+            List<String> words1 = text1.split('\\s+');
+            List<String> words2 = text2.split('\\s+');
+            
+            // convert to sets for easier comparison
+            Set<String> wordSet1 = new Set<String>();
+            Set<String> wordSet2 = new Set<String>();
+            
+            for(String word : words1) {
+                if(word.length() > 2) wordSet1.add(word);
+            }
+            
+            for(String word : words2) {
+                if(word.length() > 2) wordSet2.add(word);
+            }
+            
+            // count matching words
+            Integer matchingWords = 0;
+            for(String word : wordSet1) {
+                if(wordSet2.contains(word)) {
+                    matchingWords++;
+                    continue;
+                }
+                
+                // check for similar words
+                for(String word2 : wordSet2) {
+                    if(word.startsWith(word2) || word2.startsWith(word) ||
+                       levenshteinDistance(word, word2) <= Math.min(Math.max(2, Math.min(word.length(), word2.length()) / 3), 5)) {
+                        matchingWords++;
+                        break;
+                    }
+                }
+            }
+            
+            // calculate word-based similarity
+            Integer totalWords = Math.max(wordSet1.size(), wordSet2.size());
+            if(totalWords > 0) {
+                Decimal wordSimilarity = (matchingWords * 100.0) / totalWords;
+                
+                // if we have good word-level similarity, prioritize it
+                if(wordSimilarity > 50) {
+                    return wordSimilarity;
+                }
+            }
+        }
+        
+        // fall back to character-level Levenshtein for everything else
         Integer distance = levenshteinDistance(text1, text2);
         
         // calculate similarity percentage
@@ -552,10 +761,15 @@ public class FuzzyMatchingAlgorithm {
         if(maxLength == 0) return 100;
         
         Decimal similarity = ((maxLength - distance) * 100.0) / maxLength;
+        
+        if(text1.contains(text2) || text2.contains(text1)) {
+            similarity = Math.min(100, similarity + 15);
+        }
+        
         return similarity.setScale(1);
     }
 
-    // levenshtein distance implementation
+    // levenshtein distance implementation for character-by-character comparison
     private static Integer levenshteinDistance(String s, String t) {
         Integer m = s.length();
         Integer n = t.length();
@@ -591,8 +805,69 @@ public class FuzzyMatchingAlgorithm {
         return d[m][n];
     } 
     
+    // helper method to extract month from a date string
+    private static String extractMonthFromDate(String dateStr) {
+        if(String.isBlank(dateStr)) return '';
+        
+        dateStr = dateStr.toLowerCase().trim();
+        
+        // handle different date formats
+        // format like "Aug 1, 2025"
+        if(dateStr.startsWith('jan')) return 'january';
+        else if(dateStr.startsWith('feb')) return 'february';
+        else if(dateStr.startsWith('mar')) return 'march';
+        else if(dateStr.startsWith('apr')) return 'april';
+        else if(dateStr.startsWith('may')) return 'may';
+        else if(dateStr.startsWith('jun')) return 'june';
+        else if(dateStr.startsWith('jul')) return 'july';
+        else if(dateStr.startsWith('aug')) return 'august';
+        else if(dateStr.startsWith('sep')) return 'september';
+        else if(dateStr.startsWith('oct')) return 'october';
+        else if(dateStr.startsWith('nov')) return 'november';
+        else if(dateStr.startsWith('dec')) return 'december';
+        
+        // try to parse as a date object
+        try {
+            Date d = Date.parse(dateStr);
+            Integer monthNum = d.month();
+            
+            // convert month number to month name
+            if(monthNum == 1) return 'january';
+            else if(monthNum == 2) return 'february';
+            else if(monthNum == 3) return 'march';
+            else if(monthNum == 4) return 'april';
+            else if(monthNum == 5) return 'may';
+            else if(monthNum == 6) return 'june';
+            else if(monthNum == 7) return 'july';
+            else if(monthNum == 8) return 'august';
+            else if(monthNum == 9) return 'september';
+            else if(monthNum == 10) return 'october';
+            else if(monthNum == 11) return 'november';
+            else if(monthNum == 12) return 'december';
+        } catch(Exception e) {
+            System.debug('Failed to parse date: ' + dateStr + ' - ' + e.getMessage());
+        }
+        
+        // if month extraction failed, check for month names in the string
+        dateStr = ' ' + dateStr + ' ';
+        if(dateStr.contains(' jan') || dateStr.contains(' january')) return 'january';
+        else if(dateStr.contains(' feb') || dateStr.contains(' february')) return 'february';
+        else if(dateStr.contains(' mar') || dateStr.contains(' march')) return 'march';
+        else if(dateStr.contains(' apr') || dateStr.contains(' april')) return 'april';
+        else if(dateStr.contains(' may')) return 'may';
+        else if(dateStr.contains(' jun') || dateStr.contains(' june')) return 'june';
+        else if(dateStr.contains(' jul') || dateStr.contains(' july')) return 'july';
+        else if(dateStr.contains(' aug') || dateStr.contains(' august')) return 'august';
+        else if(dateStr.contains(' sep') || dateStr.contains(' september')) return 'september';
+        else if(dateStr.contains(' oct') || dateStr.contains(' october')) return 'october';
+        else if(dateStr.contains(' nov') || dateStr.contains(' november')) return 'november';
+        else if(dateStr.contains(' dec') || dateStr.contains(' december')) return 'december';
+        
+        return ''; // unable to extract month
+    }
+    
     // request class for approving/assigning matches
-    public class AssignmentRequest {
+    global class AssignmentRequest {
         @InvocableVariable(required=true)
         public Id studentId;
         
